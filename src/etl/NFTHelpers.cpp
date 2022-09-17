@@ -104,7 +104,13 @@ getNFTokenMintData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
         return {
             {NFTTransactionsData(
                 tokenIDResult.front(), txMeta, sttx.getTransactionID())},
-            NFTsData(tokenIDResult.front(), *owner, txMeta, false)};
+            NFTsData(
+                tokenIDResult.front(),
+                *owner,
+                ripple::nft::getIssuer(tokenIDResult.front()),
+                sttx.getFieldH256(ripple::sfURI),
+                txMeta,
+                false)};
 
     std::stringstream msg;
     msg << __func__ << " - unexpected NFTokenMint data in tx "
@@ -168,6 +174,8 @@ getNFTokenBurnData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
                     tokenID,
                     ripple::AccountID::fromVoid(
                         node.getFieldH256(ripple::sfLedgerIndex).data()),
+                    {},
+                    {},
                     txMeta,
                     true));
     }
@@ -214,7 +222,7 @@ getNFTokenAcceptOfferData(
                 .getAccountID(ripple::sfOwner);
         return {
             {NFTTransactionsData(tokenID, txMeta, sttx.getTransactionID())},
-            NFTsData(tokenID, owner, txMeta, false)};
+            NFTsData(tokenID, owner, {}, {}, txMeta, false)};
     }
 
     // Otherwise we have to infer the new owner from the affected nodes.
@@ -274,7 +282,7 @@ getNFTokenAcceptOfferData(
         if (nft != nfts.end())
             return {
                 {NFTTransactionsData(tokenID, txMeta, sttx.getTransactionID())},
-                NFTsData(tokenID, nodeOwner, txMeta, false)};
+                NFTsData(tokenID, nodeOwner, {}, {}, txMeta, false)};
     }
 
     std::stringstream msg;

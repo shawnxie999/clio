@@ -1,4 +1,3 @@
-#include <ripple/app/tx/impl/details/NFTokenUtils.h>
 #include <backend/CassandraBackend.h>
 #include <backend/DBHelpers.h>
 #include <functional>
@@ -376,17 +375,31 @@ CassandraBackend::writeNFTs(std::vector<NFTsData>&& data)
             },
             "nf_tokens");
 
-        makeAndExecuteAsyncWrite(
-            this,
-            std::make_tuple(record.tokenID),
-            [this](auto const& params) {
-                CassandraStatement statement{insertIssuerNFT_};
-                auto const& [tokenID] = params.data;
-                statement.bindNextBytes(ripple::nft::getIssuer(tokenID));
-                statement.bindNextBytes(tokenID);
-                return statement;
-            },
-            "issuer_nf_tokens");
+        if (record.issuer)
+            makeAndExecuteAsyncWrite(
+                this,
+                std::make_tuple(record.tokenID, record.issuer.value()),
+                [this](auto const& params) {
+                    CassandraStatement statement{insertIssuerNFT_};
+                    auto const& [tokenID, issuer] = params.data;
+                    statement.bindNextBytes(issuer);
+                    statement.bindNextBytes(tokenID);
+                    return statement;
+                },
+                "issuer_nf_tokens");
+
+        if (record.uri)
+            makeAndExecuteAsyncWrite(
+                this,
+                std::make_tuple(record.tokenID, record.uri.value()),
+                [this](auto const& params) {
+                    CassandraStatement statement{insertNFTURI_};
+                    auto const& [tokenID, uri] = params.data;
+                    statement.bindNextBytes(tokenID);
+                    statement.bindNextBytes(uri);
+                    return statement;
+                },
+                "nf_token_uris");
     }
 }
 
@@ -575,18 +588,26 @@ CassandraBackend::fetchNFT(
     std::uint32_t const ledgerSequence,
     boost::asio::yield_context& yield) const
 {
-    CassandraStatement statement{selectNFT_};
-    statement.bindNextBytes(tokenID);
-    statement.bindNextInt(ledgerSequence);
-    CassandraResult response = executeAsyncRead(statement, yield);
-    if (!response)
+    CassandraStatement nftStatement{selectNFT_};
+    nftStatement.bindNextBytes(tokenID);
+    nftStatement.bindNextInt(ledgerSequence);
+    CassandraResult nftResponse = executeAsyncRead(nftStatement, yield);
+    if (!nftResponse)
         return {};
 
     NFT result;
     result.tokenID = tokenID;
-    result.ledgerSequence = response.getUInt32();
-    result.owner = response.getBytes();
-    result.isBurned = response.getBool();
+    result.ledgerSequence = nftResponse.getUInt32();
+    result.owner = nftResponse.getBytes();
+    result.isBurned = nftResponse.getBool();
+
+    // now fetch URI
+    CassandraStatement uriStatement{selectNFTURI_};
+    uriStatement.bindNextBytes(tokenID);
+    CassandraResult uriResponse = executeAsyncRead(uriStatement, yield);
+    if (uriResponse.hasResult())
+        result.uri = uriResponse.getBytes();
+
     return result;
 }
 
@@ -1404,6 +1425,21 @@ CassandraBackend::open(bool readOnly)
             continue;
 
         query.str("");
+        query << "CREATE TABLE IF NOT EXISTS " << tablePrefix << "nf_token_uris"
+              << "  ("
+              << "    token_id blob PRIMARY KEY,"
+              << "    uri blob"
+              << "  )";
+        if (!executeSimpleStatement(query.str()))
+            continue;
+
+        query.str("");
+        query << "SELECT * FROM " << tablePrefix << "nf_token_uris"
+              << " LIMIT 1";
+        if (!executeSimpleStatement(query.str()))
+            continue;
+
+        query.str("");
         query << "CREATE TABLE IF NOT EXISTS " << tablePrefix
               << "nf_token_transactions"
               << "  ("
@@ -1562,6 +1598,19 @@ CassandraBackend::open(bool readOnly)
               << " (issuer,token_id)"
               << " VALUES (?,?)";
         if (!insertIssuerNFT_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "INSERT INTO " << tablePrefix << "nf_token_uris"
+              << " (token_id,uri)"
+              << " VALUES (?,?)";
+        if (!insertNFTURI_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT uri FROM " << tablePrefix << "nf_token_uris"
+              << " WHERE token_id = ?";
+        if (!selectNFTURI_.prepareStatement(query, session_.get()))
             continue;
 
         query.str("");

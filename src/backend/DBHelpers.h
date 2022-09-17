@@ -70,17 +70,26 @@ struct NFTsData
     // state of the same NFT.
     std::uint32_t transactionIndex;
     ripple::AccountID owner;
+    // We only set the issuer and uri if this is a mint tx, so that we don't
+    // write to the issuer_nf_tokens table or the nf_token_uris table every
+    // time.
+    std::optional<ripple::AccountID> issuer;
+    std::optional<ripple::uint256> uri;
     bool isBurned;
 
     NFTsData(
         ripple::uint256 const& tokenID,
         ripple::AccountID const& owner,
+        std::optional<ripple::AccountID> const& issuer,
+        std::optional<ripple::uint256> uri,
         ripple::TxMeta const& meta,
         bool isBurned)
         : tokenID(tokenID)
         , ledgerSequence(meta.getLgrSeq())
         , transactionIndex(meta.getIndex())
         , owner(owner)
+        , issuer(issuer)
+        , uri(uri)
         , isBurned(isBurned)
     {
     }
