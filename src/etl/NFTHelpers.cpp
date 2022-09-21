@@ -107,11 +107,7 @@ getNFTokenMintData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
         return {
             {NFTTransactionsData(
                 tokenIDResult.front(), txMeta, sttx.getTransactionID())},
-            NFTsData(
-                tokenIDResult.front(),
-                *owner,
-                uri,
-                txMeta)};
+            NFTsData(tokenIDResult.front(), *owner, uri, txMeta)};
     }
 
     std::stringstream msg;
