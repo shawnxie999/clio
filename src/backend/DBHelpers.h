@@ -1,6 +1,7 @@
 #ifndef CLIO_BACKEND_DBHELPERS_H_INCLUDED
 #define CLIO_BACKEND_DBHELPERS_H_INCLUDED
 
+#include <ripple/app/tx/impl/details/NFTokenUtils.h>
 #include <ripple/basics/Log.h>
 #include <ripple/basics/StringUtilities.h>
 #include <ripple/ledger/ReadView.h>
@@ -68,29 +69,57 @@ struct NFTsData
     // we keep track of which tx index created this so we can de-duplicate, as
     // it is possible for one ledger to have multiple txs that change the
     // state of the same NFT.
-    std::uint32_t transactionIndex;
+    std::optional<std::uint32_t> transactionIndex;
     ripple::AccountID owner;
     // We only set the issuer and uri if this is a mint tx, so that we don't
     // write to the issuer_nf_tokens table or the nf_token_uris table every
     // time.
     std::optional<ripple::AccountID> issuer;
-    std::optional<ripple::uint256> uri;
+    std::optional<ripple::Blob> uri;
     bool isBurned;
 
     NFTsData(
         ripple::uint256 const& tokenID,
         ripple::AccountID const& owner,
-        std::optional<ripple::AccountID> const& issuer,
-        std::optional<ripple::uint256> uri,
+        std::optional<ripple::Blob> const& uri,
+        ripple::TxMeta const& meta)
+        : tokenID(tokenID)
+        , ledgerSequence(meta.getLgrSeq())
+        , transactionIndex(meta.getIndex())
+        , owner(owner)
+        , issuer(ripple::nft::getIssuer(tokenID))
+        , uri(uri)
+        , isBurned(false)
+    {
+    }
+
+    NFTsData(
+        ripple::uint256 const& tokenID,
+        ripple::AccountID const& owner,
         ripple::TxMeta const& meta,
         bool isBurned)
         : tokenID(tokenID)
         , ledgerSequence(meta.getLgrSeq())
         , transactionIndex(meta.getIndex())
         , owner(owner)
-        , issuer(issuer)
-        , uri(uri)
+        , issuer({})
+        , uri({})
         , isBurned(isBurned)
+    {
+    }
+
+    NFTsData(
+        ripple::uint256 const& tokenID,
+        std::uint32_t const ledgerSequence,
+        ripple::AccountID const& owner,
+        std::optional<ripple::Blob> const& uri)
+        : tokenID(tokenID)
+        , ledgerSequence(ledgerSequence)
+        , transactionIndex({})
+        , owner(owner)
+        , issuer(ripple::nft::getIssuer(tokenID))
+        , uri(uri)
+        , isBurned(false)
     {
     }
 };

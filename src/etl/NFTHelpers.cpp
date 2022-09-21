@@ -1,4 +1,3 @@
-#include <ripple/app/tx/impl/details/NFTokenUtils.h>
 #include <ripple/protocol/STBase.h>
 #include <ripple/protocol/STTx.h>
 #include <ripple/protocol/TxMeta.h>
@@ -101,16 +100,19 @@ getNFTokenMintData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
         prevIDs.end(),
         std::inserter(tokenIDResult, tokenIDResult.begin()));
     if (tokenIDResult.size() == 1 && owner)
+    {
+        std::optional<ripple::Blob> uri;
+        if (sttx.isFieldPresent(ripple::sfURI))
+            uri = sttx.getFieldVL(ripple::sfURI);
         return {
             {NFTTransactionsData(
                 tokenIDResult.front(), txMeta, sttx.getTransactionID())},
             NFTsData(
                 tokenIDResult.front(),
                 *owner,
-                ripple::nft::getIssuer(tokenIDResult.front()),
-                sttx.getFieldH256(ripple::sfURI),
-                txMeta,
-                false)};
+                uri,
+                txMeta)};
+    }
 
     std::stringstream msg;
     msg << __func__ << " - unexpected NFTokenMint data in tx "
@@ -174,8 +176,6 @@ getNFTokenBurnData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
                     tokenID,
                     ripple::AccountID::fromVoid(
                         node.getFieldH256(ripple::sfLedgerIndex).data()),
-                    {},
-                    {},
                     txMeta,
                     true));
     }
@@ -222,7 +222,7 @@ getNFTokenAcceptOfferData(
                 .getAccountID(ripple::sfOwner);
         return {
             {NFTTransactionsData(tokenID, txMeta, sttx.getTransactionID())},
-            NFTsData(tokenID, owner, {}, {}, txMeta, false)};
+            NFTsData(tokenID, owner, txMeta, false)};
     }
 
     // Otherwise we have to infer the new owner from the affected nodes.
@@ -282,7 +282,7 @@ getNFTokenAcceptOfferData(
         if (nft != nfts.end())
             return {
                 {NFTTransactionsData(tokenID, txMeta, sttx.getTransactionID())},
-                NFTsData(tokenID, nodeOwner, {}, {}, txMeta, false)};
+                NFTsData(tokenID, nodeOwner, txMeta, false)};
     }
 
     std::stringstream msg;
@@ -375,4 +375,31 @@ getNFTData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
         default:
             return {{}, {}};
     }
+}
+
+std::vector<NFTsData>
+getNFTData(
+    std::uint32_t const seq,
+    std::string const& key,
+    std::string const& blob)
+{
+    std::vector<NFTsData> nfts;
+    ripple::STLedgerEntry const sle = ripple::STLedgerEntry(
+        ripple::SerialIter{blob.data(), blob.size()},
+        ripple::uint256::fromVoid(key.data()));
+
+    if (sle.getFieldU16(ripple::sfLedgerEntryType) != ripple::ltNFTOKEN_PAGE)
+        return nfts;
+
+    auto const owner = ripple::AccountID::fromVoid(key.data());
+    for (ripple::STObject const& node : sle.getFieldArray(ripple::sfNFTokens))
+    {
+        std::optional<ripple::Blob> uri;
+        if (node.isFieldPresent(ripple::sfURI))
+            uri = node.getFieldVL(ripple::sfURI);
+        nfts.emplace_back(
+            node.getFieldH256(ripple::sfNFTokenID), seq, owner, uri);
+    }
+
+    return nfts;
 }

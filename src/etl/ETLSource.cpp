@@ -673,6 +673,8 @@ public:
                         request_.ledger().sequence(),
                         std::string{obj.key()});
                 lastKey_ = obj.key();
+                backend.writeNFTs(std::move(getNFTData(
+                    request_.ledger().sequence(), obj.key(), obj.data())));
                 backend.writeLedgerObject(
                     std::move(*obj.mutable_key()),
                     request_.ledger().sequence(),

@@ -20,11 +20,21 @@
 #include <chrono>
 
 /**
- * Helper function for the ReportingETL, implemented in NFTHelpers.cpp, to
+ * Helper functions for the ReportingETL, implemented in NFTHelpers.cpp, to
  * pull to-write data out of a transaction that relates to NFTs.
  */
+// Pulling from tx via ReportingETL
 std::pair<std::vector<NFTTransactionsData>, std::optional<NFTsData>>
 getNFTData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx);
+
+// Pulling from ledger object via loadInitialLedger
+std::vector<NFTsData>
+getNFTData(
+    std::uint32_t const seq,
+    std::string const& key,
+    std::string const& blob);
+/**
+ */
 
 struct AccountTransactionsData;
 struct NFTTransactionsData;

@@ -76,7 +76,7 @@ ReportingETL::insertTransactions(
         result.nfTokensData.end(),
         [](NFTsData const& a, NFTsData const& b) {
             return a.tokenID > b.tokenID &&
-                a.transactionIndex > b.transactionIndex;
+                a.transactionIndex.value_or(0) > b.transactionIndex.value_or(0);
         });
     // Now we can unique the NFTs by tokenID.
     auto last = std::unique(
