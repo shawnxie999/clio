@@ -34,18 +34,19 @@ doNFTInfo(Context const& context)
     if (!dbResponse)
         return Status{Error::rpcOBJECT_NOT_FOUND, "NFT not found"};
 
-    response["nft_id"] = ripple::strHex(dbResponse->tokenID);
-    response["ledger_index"] = dbResponse->ledgerSequence;
-    response["owner"] = ripple::toBase58(dbResponse->owner);
+    response[JS(nft_id)] = ripple::strHex(dbResponse->tokenID);
+    response[JS(ledger_index)] = dbResponse->ledgerSequence;
+    response[JS(owner)] = ripple::toBase58(dbResponse->owner);
     response["is_burned"] = dbResponse->isBurned;
     if (dbResponse->uri)
-        response["uri"] = ripple::strHex(dbResponse->uri.value());
+        response[JS(uri)] = ripple::strHex(dbResponse->uri.value());
     else
-        response["uri"] = nullptr;
+        response[JS(uri)] = nullptr;
 
-    response["flags"] = ripple::nft::getFlags(dbResponse->tokenID);
-    response["transfer_fee"] = ripple::nft::getTransferFee(dbResponse->tokenID);
-    response["issuer"] =
+    response[JS(flags)] = ripple::nft::getFlags(dbResponse->tokenID);
+    response["transfer_rate"] =
+        ripple::nft::getTransferFee(dbResponse->tokenID);
+    response[JS(issuer)] =
         ripple::toBase58(ripple::nft::getIssuer(dbResponse->tokenID));
     response["nft_taxon"] =
         ripple::nft::toUInt32(ripple::nft::getTaxon(dbResponse->tokenID));
