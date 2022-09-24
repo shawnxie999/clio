@@ -1609,7 +1609,8 @@ CassandraBackend::open(bool readOnly)
 
         query.str("");
         query << "SELECT uri FROM " << tablePrefix << "nf_token_uris"
-              << " WHERE token_id = ?";
+              << " WHERE token_id = ?"
+              << " LIMIT 1";
         if (!selectNFTURI_.prepareStatement(query, session_.get()))
             continue;
 
