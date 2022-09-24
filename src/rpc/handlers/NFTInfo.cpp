@@ -16,7 +16,7 @@ namespace RPC {
 Result
 doNFTInfo(Context const& context)
 {
-    auto request = context.params;
+    auto const request = context.params;
     boost::json::object response = {};
 
     auto const maybeTokenID = getNFTID(request);
@@ -29,7 +29,7 @@ doNFTInfo(Context const& context)
         return *status;
     auto const lgrInfo = std::get<ripple::LedgerInfo>(maybeLedgerInfo);
 
-    std::optional<Backend::NFT> dbResponse =
+    std::optional<Backend::NFT const> const dbResponse =
         context.backend->fetchNFT(tokenID, lgrInfo.seq, context.yield);
     if (!dbResponse)
         return Status{Error::rpcOBJECT_NOT_FOUND, "NFT not found"};
