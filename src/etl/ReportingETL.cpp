@@ -1,5 +1,7 @@
 #include <ripple/basics/StringUtilities.h>
 #include <backend/DBHelpers.h>
+
+#include <etl/NFTHelpers.h>
 #include <etl/ReportingETL.h>
 
 #include <ripple/beast/core/CurrentThreadName.h>
@@ -50,7 +52,7 @@ ReportingETL::insertTransactions(
         ripple::TxMeta txMeta{
             sttx.getTransactionID(), ledger.seq, txn.metadata_blob()};
 
-        auto const [nftTxs, maybeNFT] = getNFTData(txMeta, sttx);
+        auto const [nftTxs, maybeNFT] = getNFTDataFromTx(txMeta, sttx);
         result.nfTokenTxData.insert(
             result.nfTokenTxData.end(), nftTxs.begin(), nftTxs.end());
         if (maybeNFT)

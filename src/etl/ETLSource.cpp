@@ -8,6 +8,7 @@
 #include <boost/log/trivial.hpp>
 #include <backend/DBHelpers.h>
 #include <etl/ETLSource.h>
+#include <etl/NFTHelpers.h>
 #include <etl/ProbingETLSource.h>
 #include <etl/ReportingETL.h>
 #include <rpc/RPCHelpers.h>
@@ -673,7 +674,7 @@ public:
                         request_.ledger().sequence(),
                         std::string{obj.key()});
                 lastKey_ = obj.key();
-                backend.writeNFTs(std::move(getNFTData(
+                backend.writeNFTs(std::move(getNFTDataFromObj(
                     request_.ledger().sequence(), obj.key(), obj.data())));
                 backend.writeLedgerObject(
                     std::move(*obj.mutable_key()),

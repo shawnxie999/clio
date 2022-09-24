@@ -39,7 +39,6 @@ doNFTInfo(Context const& context)
     response["owner"] = ripple::toBase58(dbResponse->owner);
     response["is_burned"] = dbResponse->isBurned;
     if (dbResponse->uri)
-        // TODO - need to return as raw hex string
         response["uri"] = ripple::strHex(dbResponse->uri.value());
     else
         response["uri"] = nullptr;

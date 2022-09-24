@@ -68,16 +68,22 @@ struct NFTsData
     // final state of an NFT per ledger. Since we pull this from transactions
     // we keep track of which tx index created this so we can de-duplicate, as
     // it is possible for one ledger to have multiple txs that change the
-    // state of the same NFT.
+    // state of the same NFT. This field is not applicable when we are loading
+    // initial NFT state via ledger objects, since we do not have to tiebreak
+    // NFT state for a given ledger in that case.
     std::optional<std::uint32_t> transactionIndex;
     ripple::AccountID owner;
-    // We only set the issuer and uri if this is a mint tx, so that we don't
+    // We only set the issuer and uri if this is a mint tx, or if we are
+    // loading initial state from NFTokenPage objects. In other words, issuer
+    // and uri should only be set if the etl process believes this NFT hasn't
+    // been seen before in our local database. We do this so that we don't
     // write to the issuer_nf_tokens table or the nf_token_uris table every
-    // time.
+    // time the same NFT changes hands.
     std::optional<ripple::AccountID> issuer;
     std::optional<ripple::Blob> uri;
     bool isBurned;
 
+    // This constructor is used when parsing an NFTokenMint tx
     NFTsData(
         ripple::uint256 const& tokenID,
         ripple::AccountID const& owner,
@@ -93,6 +99,8 @@ struct NFTsData
     {
     }
 
+    // This constructor is used when parsing an NFTokenBurn or
+    // NFTokenAcceptOffer tx
     NFTsData(
         ripple::uint256 const& tokenID,
         ripple::AccountID const& owner,
@@ -108,6 +116,8 @@ struct NFTsData
     {
     }
 
+    // This constructor is used when parsing an NFTokenPage directly from
+    // ledger state
     NFTsData(
         ripple::uint256 const& tokenID,
         std::uint32_t const ledgerSequence,

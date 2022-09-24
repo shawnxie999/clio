@@ -346,7 +346,7 @@ getNFTokenCreateOfferData(
 }
 
 std::pair<std::vector<NFTTransactionsData>, std::optional<NFTsData>>
-getNFTData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
+getNFTDataFromTx(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
 {
     if (txMeta.getResultTER() != ripple::tesSUCCESS)
         return {{}, {}};
@@ -374,7 +374,7 @@ getNFTData(ripple::TxMeta const& txMeta, ripple::STTx const& sttx)
 }
 
 std::vector<NFTsData>
-getNFTData(
+getNFTDataFromObj(
     std::uint32_t const seq,
     std::string const& key,
     std::string const& blob)
