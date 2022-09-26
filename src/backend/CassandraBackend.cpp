@@ -588,7 +588,7 @@ CassandraBackend::fetchNFT(
     return result;
 }
 
-std::optional<IssuerNFTs>
+std::optional<std::pair<std::vector<ripple::uint256>, std::optional<ripple::uint256>>>
 CassandraBackend::fetchIssuerNFTs(
     ripple::AccountID const& issuer,
     std::optional<ripple::uint256> const& cursorIn,
@@ -621,12 +621,11 @@ CassandraBackend::fetchIssuerNFTs(
             nf_tokens.push_back(nf_token);
     } while (response.nextRow());
 
-    IssuerNFTs result;
+    std::pair<std::vector<ripple::uint256>, std::optional<ripple::uint256>> result;
     if(hasCursor)
-        result.cursor = cursor;
-
-    result.issuer = issuer;
-    result.nf_tokens = nf_tokens;
+        result = std::make_pair(nf_tokens, cursor);
+    else
+        result = std::make_pair(nf_tokens, std::nullopt);
     return result;
 }
 
