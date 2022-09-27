@@ -263,6 +263,27 @@ public:
         cass_tuple_free(tuple);
         curBindingIndex_++;
     }
+    
+    void
+    bindNextByteCollection(CassCollection* collection)
+    {
+        if (!statement_)
+            throw std::runtime_error(
+                "CassandraStatement::bindNextByteColletion - statement_ is null");
+        CassError rc = cass_statement_bind_collection(
+            statement_,
+            curBindingIndex_,
+            collection);
+        if (rc != CASS_OK)
+        {
+            std::stringstream ss;
+            ss << "Error binding bytes to statement: " << rc << ", "
+               << cass_error_desc(rc);
+            BOOST_LOG_TRIVIAL(error) << __func__ << " : " << ss.str();
+            throw std::runtime_error(ss.str());
+        }
+        curBindingIndex_++;
+    }
 
     ~CassandraStatement()
     {
@@ -628,6 +649,7 @@ private:
     CassandraPreparedStatement selectAccountTxForward_;
     CassandraPreparedStatement insertNFT_;
     CassandraPreparedStatement selectNFT_;
+    CassandraPreparedStatement selectNFTList_;
     CassandraPreparedStatement insertIssuerNFT_;
     CassandraPreparedStatement selectIssuerNFT_;
     CassandraPreparedStatement insertNFTTx_;
@@ -889,7 +911,7 @@ public:
         std::uint32_t const ledgerSequence,
         boost::asio::yield_context& yield) const override;
 
-    std::optional<std::pair<std::vector<ripple::uint256>, std::optional<ripple::uint256>>>
+    std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
     fetchIssuerNFTs(
         ripple::AccountID const& issuer,
         std::optional<ripple::uint256> const& cursor,

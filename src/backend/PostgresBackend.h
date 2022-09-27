@@ -68,7 +68,7 @@ public:
         std::uint32_t const ledgerSequence,
         boost::asio::yield_context& yield) const override;
         
-    std::optional<std::pair<std::vector<ripple::uint256>, std::optional<ripple::uint256>>>
+    std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
     fetchIssuerNFTs(
         ripple::AccountID const& issuer,
         std::optional<ripple::uint256> const& cursor,

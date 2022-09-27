@@ -441,7 +441,7 @@ PostgresBackend::fetchNFT(
     throw std::runtime_error("Not implemented");
 }
 
-std::optional<std::pair<std::vector<ripple::uint256>, std::optional<ripple::uint256>>>
+std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
 PostgresBackend::fetchIssuerNFTs(
     ripple::AccountID const& issuer,
     std::optional<ripple::uint256> const& cursor,

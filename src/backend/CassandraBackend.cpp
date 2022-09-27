@@ -588,7 +588,7 @@ CassandraBackend::fetchNFT(
     return result;
 }
 
-std::optional<std::pair<std::vector<ripple::uint256>, std::optional<ripple::uint256>>>
+std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
 CassandraBackend::fetchIssuerNFTs(
     ripple::AccountID const& issuer,
     std::optional<ripple::uint256> const& cursorIn,
@@ -602,7 +602,7 @@ CassandraBackend::fetchIssuerNFTs(
     else
          statement.bindNextBytes(static_cast<ripple::uint256>(0));
     statement.bindNextUInt(limit + 1);
-    
+
     CassandraResult response = executeAsyncRead(statement, yield);
     if (!response)
         return {};
@@ -625,6 +625,43 @@ CassandraBackend::fetchIssuerNFTs(
         result = std::make_pair(nf_tokens, cursor);
     else
         result = std::make_pair(nf_tokens, std::nullopt);
+
+
+    CassandraStatement statement2{selectNFTList_};
+    CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
+    for(ripple::uint256 nf_token: nf_tokens)
+    {
+        CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nf_token.data()), nf_token.size());
+        if (append != CASS_OK)
+        {
+            std::stringstream ss;
+            ss << "Error appending bytes to collection: " << append << ", "
+               << cass_error_desc(append);
+            BOOST_LOG_TRIVIAL(error) << __func__ << " : " << ss.str();
+            throw std::runtime_error(ss.str());
+        }
+    } 
+    statement2.bindNextByteCollection(collection);
+    BOOST_LOG_TRIVIAL(debug) << __func__    << "response beforeeeeeeeeeeeeeee";
+    CassandraResult response2= executeAsyncRead(statement2, yield);
+    if (!response2)
+        return {};
+    auto numRows2 = response2.numRows();
+    BOOST_LOG_TRIVIAL(debug) << __func__    << "nuber of rowwwwws "<< numRows2;
+  //  statement.bindNextInt(ledgerSequence);
+    cass_collection_free(collection);
+
+    do
+    {
+        NFT nftResult;
+        nftResult.tokenID = response2.getUInt32();
+        nftResult.ledgerSequence = response2.getUInt32();
+        nftResult.owner = response2.getBytes();
+        nftResult.isBurned = response2.getBool();
+    //    BOOST_LOG_TRIVIAL(debug) << __func__    << "seqqqqqqqqqqqq "<<  response2.getUInt32();
+    // auto test = response2.getBytes();
+    // BOOST_LOG_TRIVIAL(debug) << __func__    << "burnnned "<<  response2.getBool();
+    } while (response2.nextRow());
     return result;
 }
 
@@ -1580,6 +1617,15 @@ CassandraBackend::open(bool readOnly)
               << " ORDER BY sequence DESC"
               << " LIMIT 1";
         if (!selectNFT_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT token_id,sequence,owner,is_burned"
+              << " FROM " << tablePrefix << "nf_tokens WHERE"
+              << " token_id IN ? AND"
+              << " sequence <= ?"
+              << " ORDER BY sequence DESC";
+        if (!selectNFTList_.prepareStatement(query, session_.get()))
             continue;
 
         query.str("");
