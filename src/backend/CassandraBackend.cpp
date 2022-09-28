@@ -601,7 +601,7 @@ CassandraBackend::fetchIssuerNFTs(
     if(cursorIn)
         issuerNFTStatement.bindNextBytes(cursorIn.value());
     else
-         issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
+        issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
     issuerNFTStatement.bindNextUInt(limit + 1);
 
     //queries for a list nftIDs against issuer_nf_tokens table
