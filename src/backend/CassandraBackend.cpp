@@ -611,32 +611,31 @@ CassandraBackend::fetchIssuerNFTs(
     auto cursor = cursorIn;
     auto numRows = issuerNFTResponse.numRows();
     auto hasCursor = (limit + 1 == static_cast<std::uint32_t>(numRows)) ? true : false;
-    std::vector<ripple::uint256> nf_tokens = {};
+    CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
     do
     {
-        ripple::uint256 const nf_token = issuerNFTResponse.getUInt256();
+        ripple::uint256 const nftID = issuerNFTResponse.getUInt256();
         if (hasCursor && --numRows == 0)
-            cursor = nf_token;
+        {
+            cursor = nftID;
+        }
         else
-            nf_tokens.push_back(nf_token);
+        {
+            CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nftID.data()), nftID.size());
+            if (append != CASS_OK)
+            {
+                std::stringstream ss;
+                ss << "Error appending bytes to collection: " << append << ", "
+                << cass_error_desc(append);
+                BOOST_LOG_TRIVIAL(error) << __func__ << " : " << ss.str();
+                throw std::runtime_error(ss.str());
+            }
+        }
+         
     } while (issuerNFTResponse.nextRow());
 
 
     CassandraStatement nftListStatement{selectNFTList_};
-    CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
-    for(ripple::uint256 nf_token: nf_tokens)
-    {
-         BOOST_LOG_TRIVIAL(debug) << __func__    << "DEBUG VECOTR RRRRRRRRR TOKEN LEN "<<nf_token.size();
-        CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nf_token.data()), nf_token.size());
-        if (append != CASS_OK)
-        {
-            std::stringstream ss;
-            ss << "Error appending bytes to collection: " << append << ", "
-               << cass_error_desc(append);
-            BOOST_LOG_TRIVIAL(error) << __func__ << " : " << ss.str();
-            throw std::runtime_error(ss.str());
-        }
-    } 
     nftListStatement.bindNextByteCollection(collection);
     nftListStatement.bindNextInt(ledgerSequence);
     BOOST_LOG_TRIVIAL(debug) << __func__    << "response beforeeeeeeeeeeeeeee";
