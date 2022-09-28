@@ -613,7 +613,7 @@ CassandraBackend::fetchIssuerNFTs(
     auto numRows = issuerNFTResponse.numRows();
     auto hasCursor = (limit + 1 == static_cast<std::uint32_t>(numRows)) ? true : false;
 
-    //constructs a list to be used against the IN keyword within a query
+    //constructs a list to be used with the IN keyword within a query
     CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
     
     do
