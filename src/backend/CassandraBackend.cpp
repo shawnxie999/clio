@@ -634,30 +634,24 @@ CassandraBackend::fetchIssuerNFTs(
          
     } while (issuerNFTResponse.nextRow());
 
-
     CassandraStatement nftListStatement{selectNFTList_};
     nftListStatement.bindNextByteCollection(collection);
     nftListStatement.bindNextInt(ledgerSequence);
-    BOOST_LOG_TRIVIAL(debug) << __func__    << "response beforeeeeeeeeeeeeeee";
     CassandraResult nftListResponse= executeAsyncRead(nftListStatement, yield);
     if (!nftListResponse)
         return {};
+
     auto numRows2 = nftListResponse.numRows();
-    BOOST_LOG_TRIVIAL(debug) << __func__    << "nuber of rowwwwws "<< numRows2;
     cass_collection_free(collection);
     std::vector<NFT> nftInfolist = {};
     do
     {
         NFT nftResult;
         nftResult.tokenID = nftListResponse.getUInt256();
-        BOOST_LOG_TRIVIAL(debug) << __func__    << " TOKENIDDDDD "<<  ripple::strHex(nftResult.tokenID);
         nftResult.ledgerSequence = nftListResponse.getUInt32();
         nftResult.owner = nftListResponse.getBytes();
         nftResult.isBurned = nftListResponse.getBool();
         nftInfolist.push_back(nftResult);
-    //    BOOST_LOG_TRIVIAL(debug) << __func__    << "seqqqqqqqqqqqq "<<  nftListResponse.getUInt32();
-    // auto test = nftListResponse.getBytes();
-    // BOOST_LOG_TRIVIAL(debug) << __func__    << "burnnned "<<  nftListResponse.getBool();
     } while (nftListResponse.nextRow());
 
     std::pair<std::vector<NFT>, std::optional<ripple::uint256>> result;
