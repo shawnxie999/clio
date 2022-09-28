@@ -596,36 +596,37 @@ CassandraBackend::fetchIssuerNFTs(
     std::uint32_t const limit,
     boost::asio::yield_context& yield) const
 {
-    CassandraStatement statement{selectIssuerNFT_};
-    statement.bindNextBytes(issuer);
+    CassandraStatement issuerNFTStatement{selectIssuerNFT_};
+    issuerNFTStatement.bindNextBytes(issuer);
     if(cursorIn)
-        statement.bindNextBytes(cursorIn.value());
+        issuerNFTStatement.bindNextBytes(cursorIn.value());
     else
-         statement.bindNextBytes(static_cast<ripple::uint256>(0));
-    statement.bindNextUInt(limit + 1);
+         issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
+    issuerNFTStatement.bindNextUInt(limit + 1);
 
-    CassandraResult response = executeAsyncRead(statement, yield);
-    if (!response)
+    CassandraResult issuerNFTResponse = executeAsyncRead(issuerNFTStatement, yield);
+    if (!issuerNFTResponse)
         return {};
 
     auto cursor = cursorIn;
-    auto numRows = response.numRows();
+    auto numRows = issuerNFTResponse.numRows();
     auto hasCursor = (limit + 1 == static_cast<std::uint32_t>(numRows)) ? true : false;
     std::vector<ripple::uint256> nf_tokens = {};
     do
     {
-        ripple::uint256 const nf_token = response.getUInt256();
+        ripple::uint256 const nf_token = issuerNFTResponse.getUInt256();
         if (hasCursor && --numRows == 0)
             cursor = nf_token;
         else
             nf_tokens.push_back(nf_token);
-    } while (response.nextRow());
+    } while (issuerNFTResponse.nextRow());
 
 
-    CassandraStatement statement2{selectNFTList_};
+    CassandraStatement nftListStatement{selectNFTList_};
     CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
     for(ripple::uint256 nf_token: nf_tokens)
     {
+         BOOST_LOG_TRIVIAL(debug) << __func__    << "DEBUG VECOTR RRRRRRRRR TOKEN LEN "<<nf_token.size();
         CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nf_token.data()), nf_token.size());
         if (append != CASS_OK)
         {
@@ -636,29 +637,29 @@ CassandraBackend::fetchIssuerNFTs(
             throw std::runtime_error(ss.str());
         }
     } 
-    statement2.bindNextByteCollection(collection);
-    statement2.bindNextInt(ledgerSequence);
+    nftListStatement.bindNextByteCollection(collection);
+    nftListStatement.bindNextInt(ledgerSequence);
     BOOST_LOG_TRIVIAL(debug) << __func__    << "response beforeeeeeeeeeeeeeee";
-    CassandraResult response2= executeAsyncRead(statement2, yield);
-    if (!response2)
+    CassandraResult nftListResponse= executeAsyncRead(nftListStatement, yield);
+    if (!nftListResponse)
         return {};
-    auto numRows2 = response2.numRows();
+    auto numRows2 = nftListResponse.numRows();
     BOOST_LOG_TRIVIAL(debug) << __func__    << "nuber of rowwwwws "<< numRows2;
     cass_collection_free(collection);
     std::vector<NFT> nftInfolist = {};
     do
     {
         NFT nftResult;
-        nftResult.tokenID = response2.getUInt256();
+        nftResult.tokenID = nftListResponse.getUInt256();
         BOOST_LOG_TRIVIAL(debug) << __func__    << " TOKENIDDDDD "<<  ripple::strHex(nftResult.tokenID);
-        nftResult.ledgerSequence = response2.getUInt32();
-        nftResult.owner = response2.getBytes();
-        nftResult.isBurned = response2.getBool();
+        nftResult.ledgerSequence = nftListResponse.getUInt32();
+        nftResult.owner = nftListResponse.getBytes();
+        nftResult.isBurned = nftListResponse.getBool();
         nftInfolist.push_back(nftResult);
-    //    BOOST_LOG_TRIVIAL(debug) << __func__    << "seqqqqqqqqqqqq "<<  response2.getUInt32();
-    // auto test = response2.getBytes();
-    // BOOST_LOG_TRIVIAL(debug) << __func__    << "burnnned "<<  response2.getBool();
-    } while (response2.nextRow());
+    //    BOOST_LOG_TRIVIAL(debug) << __func__    << "seqqqqqqqqqqqq "<<  nftListResponse.getUInt32();
+    // auto test = nftListResponse.getBytes();
+    // BOOST_LOG_TRIVIAL(debug) << __func__    << "burnnned "<<  nftListResponse.getBool();
+    } while (nftListResponse.nextRow());
 
     std::pair<std::vector<NFT>, std::optional<ripple::uint256>> result;
     if(hasCursor)
