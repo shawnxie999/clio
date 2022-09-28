@@ -642,14 +642,12 @@ CassandraBackend::fetchIssuerNFTs(
     nftListStatement.bindNextByteCollection(collection);
     nftListStatement.bindNextInt(ledgerSequence);
 
-    //queries for ledger_sequence, is_bured and owner of each NFT
+    //queries for ledger_sequence, is_burned and owner of each NFT
     CassandraResult nftListResponse= executeAsyncRead(nftListStatement, yield);
     if (!nftListResponse)
         return {};
 
-    auto numRows2 = nftListResponse.numRows();
     cass_collection_free(collection);
-
     std::vector<NFT> nftInfoList = {};
     do
     {
