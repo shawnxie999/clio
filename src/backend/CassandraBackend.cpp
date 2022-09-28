@@ -591,6 +591,7 @@ CassandraBackend::fetchNFT(
 std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
 CassandraBackend::fetchIssuerNFTs(
     ripple::AccountID const& issuer,
+    std::uint32_t const ledgerSequence,
     std::optional<ripple::uint256> const& cursorIn,
     std::uint32_t const limit,
     boost::asio::yield_context& yield) const
@@ -620,12 +621,6 @@ CassandraBackend::fetchIssuerNFTs(
             nf_tokens.push_back(nf_token);
     } while (response.nextRow());
 
-    std::pair<std::vector<ripple::uint256>, std::optional<ripple::uint256>> result;
-    if(hasCursor)
-        result = std::make_pair(nf_tokens, cursor);
-    else
-        result = std::make_pair(nf_tokens, std::nullopt);
-
 
     CassandraStatement statement2{selectNFTList_};
     CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
@@ -642,26 +637,34 @@ CassandraBackend::fetchIssuerNFTs(
         }
     } 
     statement2.bindNextByteCollection(collection);
+    statement2.bindNextInt(ledgerSequence);
     BOOST_LOG_TRIVIAL(debug) << __func__    << "response beforeeeeeeeeeeeeeee";
     CassandraResult response2= executeAsyncRead(statement2, yield);
     if (!response2)
         return {};
     auto numRows2 = response2.numRows();
     BOOST_LOG_TRIVIAL(debug) << __func__    << "nuber of rowwwwws "<< numRows2;
-  //  statement.bindNextInt(ledgerSequence);
     cass_collection_free(collection);
-
+    std::vector<NFT> nftInfolist = {};
     do
     {
         NFT nftResult;
-        nftResult.tokenID = response2.getUInt32();
+        nftResult.tokenID = response2.getUInt256();
+        BOOST_LOG_TRIVIAL(debug) << __func__    << " TOKENIDDDDD "<<  ripple::strHex(nftResult.tokenID);
         nftResult.ledgerSequence = response2.getUInt32();
         nftResult.owner = response2.getBytes();
         nftResult.isBurned = response2.getBool();
+        nftInfolist.push_back(nftResult);
     //    BOOST_LOG_TRIVIAL(debug) << __func__    << "seqqqqqqqqqqqq "<<  response2.getUInt32();
     // auto test = response2.getBytes();
     // BOOST_LOG_TRIVIAL(debug) << __func__    << "burnnned "<<  response2.getBool();
     } while (response2.nextRow());
+
+    std::pair<std::vector<NFT>, std::optional<ripple::uint256>> result;
+    if(hasCursor)
+        result = std::make_pair(nftInfolist, cursor);
+    else
+        result = std::make_pair(nftInfolist, std::nullopt);
     return result;
 }
 

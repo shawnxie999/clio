@@ -914,7 +914,8 @@ public:
     std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
     fetchIssuerNFTs(
         ripple::AccountID const& issuer,
-        std::optional<ripple::uint256> const& cursor,
+        std::uint32_t const ledgerSequence,
+        std::optional<ripple::uint256> const& cursorIn,
         std::uint32_t const limit,
         boost::asio::yield_context& yield) const override;
 
