@@ -604,6 +604,7 @@ CassandraBackend::fetchIssuerNFTs(
          issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
     issuerNFTStatement.bindNextUInt(limit + 1);
 
+    //queries for a list nftIDs against issuer_nf_tokens table
     CassandraResult issuerNFTResponse = executeAsyncRead(issuerNFTStatement, yield);
     if (!issuerNFTResponse)
         return {};
@@ -611,7 +612,10 @@ CassandraBackend::fetchIssuerNFTs(
     auto cursor = cursorIn;
     auto numRows = issuerNFTResponse.numRows();
     auto hasCursor = (limit + 1 == static_cast<std::uint32_t>(numRows)) ? true : false;
+
+    //constructs a list to be used against the IN keyword within a query
     CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
+    
     do
     {
         ripple::uint256 const nftID = issuerNFTResponse.getUInt256();
@@ -621,6 +625,7 @@ CassandraBackend::fetchIssuerNFTs(
         }
         else
         {
+            //append each nftID to a list that is going to be queried against the nf_tokens table
             CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nftID.data()), nftID.size());
             if (append != CASS_OK)
             {
@@ -631,18 +636,20 @@ CassandraBackend::fetchIssuerNFTs(
                 throw std::runtime_error(ss.str());
             }
         }
-         
     } while (issuerNFTResponse.nextRow());
 
     CassandraStatement nftListStatement{selectNFTList_};
     nftListStatement.bindNextByteCollection(collection);
     nftListStatement.bindNextInt(ledgerSequence);
+
+    //queries for ledger_sequence, is_bured and owner of each NFT
     CassandraResult nftListResponse= executeAsyncRead(nftListStatement, yield);
     if (!nftListResponse)
         return {};
 
     auto numRows2 = nftListResponse.numRows();
     cass_collection_free(collection);
+
     std::vector<NFT> nftInfolist = {};
     do
     {
