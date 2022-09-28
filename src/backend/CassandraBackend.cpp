@@ -650,7 +650,7 @@ CassandraBackend::fetchIssuerNFTs(
     auto numRows2 = nftListResponse.numRows();
     cass_collection_free(collection);
 
-    std::vector<NFT> nftInfolist = {};
+    std::vector<NFT> nftInfoList = {};
     do
     {
         NFT nftResult;
@@ -658,14 +658,14 @@ CassandraBackend::fetchIssuerNFTs(
         nftResult.ledgerSequence = nftListResponse.getUInt32();
         nftResult.owner = nftListResponse.getBytes();
         nftResult.isBurned = nftListResponse.getBool();
-        nftInfolist.push_back(nftResult);
+        nftInfoList.push_back(nftResult);
     } while (nftListResponse.nextRow());
 
     std::pair<std::vector<NFT>, std::optional<ripple::uint256>> result;
     if(hasCursor)
-        result = std::make_pair(nftInfolist, cursor);
+        result = std::make_pair(nftInfoList, cursor);
     else
-        result = std::make_pair(nftInfolist, std::nullopt);
+        result = std::make_pair(nftInfoList, std::nullopt);
     return result;
 }
 
