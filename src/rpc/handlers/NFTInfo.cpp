@@ -5,12 +5,6 @@
 #include <backend/BackendInterface.h>
 #include <rpc/RPCHelpers.h>
 
-// {
-//   nft_id: <ident>
-//   ledger_hash: <ledger>
-//   ledger_index: <ledger_index>
-// }
-
 namespace RPC {
 
 Result
