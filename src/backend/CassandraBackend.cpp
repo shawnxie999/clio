@@ -648,7 +648,7 @@ CassandraBackend::fetchIssuerNFTs(
     //Even if response from nf_tokens is empty, and we have a cursor,
     //it is still possible that there are unfetched NFTs
     //because there is no guarantee for the ledger sequence of a NFT to be monotonically increasing
-    //despite token_id is sorted in monotonically increasing order.
+    //when token_id is sorted in monotonically increasing order.
     if (!nftListResponse && hasCursor)
         return std::make_pair(nftInfoList, cursor);
     else if (!nftListResponse)
