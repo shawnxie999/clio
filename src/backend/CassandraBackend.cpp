@@ -596,13 +596,13 @@ CassandraBackend::fetchIssuerNFTs(
     std::uint32_t const limit,
     boost::asio::yield_context& yield) const
 {
-    CassandraStatement issuerNFTStatement{selectIssuerNFT_};
+    CassandraStatement issuerNFTStatement{selectIssuerNFTs_};
     issuerNFTStatement.bindNextBytes(issuer);
     if(cursorIn)
         issuerNFTStatement.bindNextBytes(cursorIn.value());
     else
         issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
-    issuerNFTStatement.bindNextUInt(limit + 1);
+    issuerNFTStatement.bindNextUInt(limit);
 
     //queries for a list nftIDs against issuer_nf_tokens table
     CassandraResult issuerNFTResponse = executeAsyncRead(issuerNFTStatement, yield);
@@ -611,7 +611,7 @@ CassandraBackend::fetchIssuerNFTs(
 
     auto cursor = cursorIn;
     auto numRows = issuerNFTResponse.numRows();
-    auto hasCursor = (limit + 1 == static_cast<std::uint32_t>(numRows)) ? true : false;
+    auto hasCursor = (limit == static_cast<std::uint32_t>(numRows)) ? true : false;
 
     //constructs a list to be used with the IN keyword within a query
     CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
@@ -623,19 +623,18 @@ CassandraBackend::fetchIssuerNFTs(
         {
             cursor = nftID;
         }
-        else
+       
+        //append each nftID to a list that is going to be queried against the nf_tokens table
+        CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nftID.data()), nftID.size());
+        if (append != CASS_OK)
         {
-            //append each nftID to a list that is going to be queried against the nf_tokens table
-            CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nftID.data()), nftID.size());
-            if (append != CASS_OK)
-            {
-                std::stringstream ss;
-                ss << "Error appending bytes to collection: " << append << ", "
-                << cass_error_desc(append);
-                BOOST_LOG_TRIVIAL(error) << __func__ << " : " << ss.str();
-                throw std::runtime_error(ss.str());
-            }
+            std::stringstream ss;
+            ss << "Error appending bytes to collection: " << append << ", "
+            << cass_error_desc(append);
+            BOOST_LOG_TRIVIAL(error) << __func__ << " : " << ss.str();
+            throw std::runtime_error(ss.str());
         }
+        
     } while (issuerNFTResponse.nextRow());
 
     CassandraStatement nftListStatement{selectNFTList_};
@@ -1645,10 +1644,10 @@ CassandraBackend::open(bool readOnly)
         query << "SELECT token_id"
               << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
               << " issuer = ? AND"
-              << " token_id >= ?"
+              << " token_id > ?"
               << " ORDER BY token_id ASC"
               << " LIMIT ?";
-        if (!selectIssuerNFT_.prepareStatement(query, session_.get()))
+        if (!selectIssuerNFTs_.prepareStatement(query, session_.get()))
             continue;
 
         query.str("");
