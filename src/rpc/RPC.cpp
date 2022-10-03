@@ -234,6 +234,7 @@ static HandlerTable handlerTable{
     {"nft_history", &doNFTHistory, LimitRange{1, 50, 100}, true},
     {"nft_info", &doNFTInfo, {}, true},
     {"nft_sell_offers", &doNFTSellOffers, LimitRange{1, 50, 100}},
+    {"issuer_nfts", &doIssuerNFTs, LimitRange{1, 50, 100}},
     {"ledger_entry", &doLedgerEntry, {}},
     {"ledger_range", &doLedgerRange, {}},
     {"subscribe", &doSubscribe, {}},

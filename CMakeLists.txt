@@ -78,6 +78,7 @@ target_sources(clio PRIVATE
   src/rpc/handlers/NFTHistory.cpp
   src/rpc/handlers/NFTInfo.cpp
   src/rpc/handlers/NFTOffers.cpp
+  src/rpc/handlers/IssuerNFTs.cpp
   # Ledger
   src/rpc/handlers/Ledger.cpp
   src/rpc/handlers/LedgerData.cpp
