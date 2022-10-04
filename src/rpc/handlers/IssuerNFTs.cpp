@@ -141,17 +141,19 @@ doIssuerNFTs(Context const& context)
     
     response["issuer"] = ripple::to_string(accountID);
     response["issuer_nfts"] = boost::json::value(boost::json::array_kind);
-    
-    if(dbResponse){
-        auto& jsonNFTs = response["issuer_nfts"].as_array();
-        for (auto const& nft : dbResponse->first){
-            if(Status const& status = appendIssuerNFTJson(context, nft, jsonNFTs); status){
-                return status;
-            }
-        } 
-        if(dbResponse->second)
-            response["marker"] = ripple::strHex(dbResponse->second.value());
-    }
+    if(!dbResponse)
+        return response;
+
+    auto& jsonNFTs = response["issuer_nfts"].as_array();
+    for (auto const& nft : dbResponse->first)
+    {
+        if(Status const& status = appendIssuerNFTJson(context, nft, jsonNFTs); status){
+            return status;
+        }
+    } 
+    if(dbResponse->second)
+        response["marker"] = ripple::strHex(dbResponse->second.value());
+  
     return response;
 }
 }
