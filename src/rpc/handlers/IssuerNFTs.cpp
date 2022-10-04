@@ -147,9 +147,8 @@ doIssuerNFTs(Context const& context)
     auto& jsonNFTs = response["issuer_nfts"].as_array();
     for (auto const& nft : dbResponse->first)
     {
-        if(Status const& status = appendIssuerNFTJson(context, nft, jsonNFTs); status){
+        if(Status const& status = appendIssuerNFTJson(context, nft, jsonNFTs); status)
             return status;
-        }
     } 
     if(dbResponse->second)
         response["marker"] = ripple::strHex(dbResponse->second.value());
