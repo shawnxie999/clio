@@ -1,7 +1,10 @@
-#include <backend/CassandraBackend.h>
-#include <backend/DBHelpers.h>
 #include <functional>
 #include <unordered_map>
+
+#include <ripple/app/tx/impl/details/NFTokenUtils.h>
+
+#include <backend/CassandraBackend.h>
+#include <backend/DBHelpers.h>
 
 namespace Backend {
 
@@ -383,6 +386,8 @@ CassandraBackend::writeNFTs(std::vector<NFTsData>&& data)
                     CassandraStatement statement{insertIssuerNFT_};
                     auto const& [tokenID, issuer] = params.data;
                     statement.bindNextBytes(issuer);
+                    statement.bindNextInt(
+                        ripple::nft::toUInt32(ripple::nft::getTaxon(tokenID)));
                     statement.bindNextBytes(tokenID);
                     return statement;
                 },
@@ -1412,8 +1417,9 @@ CassandraBackend::open(bool readOnly)
               << "issuer_nf_tokens"
               << "  ("
               << "    issuer blob,"
+              << "    token_taxon bigint,"
               << "    token_id blob,"
-              << "    PRIMARY KEY (issuer, token_id)"
+              << "    PRIMARY KEY (issuer, token_taxon, token_id)"
               << "  )";
         if (!executeSimpleStatement(query.str()))
             continue;
@@ -1595,8 +1601,8 @@ CassandraBackend::open(bool readOnly)
 
         query.str("");
         query << "INSERT INTO " << tablePrefix << "issuer_nf_tokens"
-              << " (issuer,token_id)"
-              << " VALUES (?,?)";
+              << " (issuer,token_taxon,token_id)"
+              << " VALUES (?,?,?)";
         if (!insertIssuerNFT_.prepareStatement(query, session_.get()))
             continue;
 
