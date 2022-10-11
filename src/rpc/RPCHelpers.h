@@ -258,6 +258,9 @@ specifiesCurrentOrClosedLedger(boost::json::object const& request);
 std::variant<ripple::uint256, Status>
 getNFTID(boost::json::object const& request);
 
+Status
+getNFTTaxon(RPC::Context const& context, std::uint32_t& taxon);
+
 // This function is the driver for both `account_tx` and `nft_tx` and should
 // be used for any future transaction enumeration APIs.
 std::variant<Status, boost::json::object>

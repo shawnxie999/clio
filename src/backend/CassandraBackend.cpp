@@ -592,6 +592,7 @@ std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
 CassandraBackend::fetchIssuerNFTs(
     ripple::AccountID const& issuer,
     std::uint32_t const ledgerSequence,
+  //  std::uint32_t const taxon,
     std::optional<ripple::uint256> const& cursorIn,
     std::uint32_t const limit,
     boost::asio::yield_context& yield) const
@@ -602,6 +603,8 @@ CassandraBackend::fetchIssuerNFTs(
         issuerNFTStatement.bindNextBytes(cursorIn.value());
     else
         issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
+    
+  //  issuerNFTStatement.bindNextInt(taxon)
     issuerNFTStatement.bindNextUInt(limit);
 
     //queries for a list nftIDs against issuer_nf_tokens table
@@ -659,6 +662,12 @@ CassandraBackend::fetchIssuerNFTs(
         nftResult.ledgerSequence = nftListResponse.getUInt32();
         nftResult.owner = nftListResponse.getBytes();
         nftResult.isBurned = nftListResponse.getBool();
+
+        // CassandraStatement uriStatement{selectNFTURI_};
+        // uriStatement.bindNextBytes(nftResult.tokenID);
+        // CassandraResult uriResponse = executeAsyncRead(uriStatement, yield);
+        // if (uriResponse.hasResult())
+        //     nftResult.uri = uriResponse.getBytes();
         nftInfoList.push_back(nftResult);
     } while (nftListResponse.nextRow());
 

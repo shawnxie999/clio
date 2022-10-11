@@ -1502,6 +1502,22 @@ getNFTID(boost::json::object const& request)
     return tokenid;
 }
 
+Status
+getNFTTaxon(RPC::Context const& context, std::uint32_t& taxon)
+{
+    if (context.params.contains("taxon"))
+    {
+        if (!context.params.at("taxon").is_int64())
+            return Status{Error::rpcINVALID_PARAMS, "taxonNotInt"};
+
+        taxon = context.params.at("taxon").as_int64();
+        if (taxon <= 0)
+            return Status{Error::rpcINVALID_PARAMS, "taxonNotPositive"};
+    }
+
+    return {};
+}
+
 // TODO - this function is long and shouldn't be responsible for as much as it
 // is. Split it out into some helper functions.
 std::variant<Status, boost::json::object>

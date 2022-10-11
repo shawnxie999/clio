@@ -123,6 +123,10 @@ doIssuerNFTs(Context const& context)
     if (auto const status = getAccount(request, accountID); status)
         return status;
 
+    std::uint32_t taxon = 0;
+    if (auto const status = getNFTTaxon(context, taxon); status)
+        return status;
+
     std::uint32_t limit;
     if (auto const status = getLimit(context, limit); status)
         return status;
