@@ -152,7 +152,7 @@ doIssuerNFTs(Context const& context)
     } 
     if(dbResponse->second)
         response["marker"] = ripple::strHex(dbResponse->second.value());
-  
+    response["limit"] = limit;
     return response;
 }
 }
