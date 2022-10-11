@@ -1505,16 +1505,16 @@ getNFTID(boost::json::object const& request)
 Status
 getNFTTaxon(RPC::Context const& context, std::uint32_t& taxon)
 {
-    if (context.params.contains("taxon"))
-    {
-        if (!context.params.at("taxon").is_int64())
-            return Status{Error::rpcINVALID_PARAMS, "taxonNotInt"};
+    if(!context.params.contains("taxon"))
+        return {};
 
-        taxon = context.params.at("taxon").as_int64();
-        if (taxon <= 0)
-            return Status{Error::rpcINVALID_PARAMS, "taxonNotPositive"};
-    }
+    if (!context.params.at("taxon").is_int64())
+        return Status{Error::rpcINVALID_PARAMS, "taxonNotInt"};
 
+    taxon = context.params.at("taxon").as_int64();
+    if (taxon <= 0)
+        return Status{Error::rpcINVALID_PARAMS, "taxonNotPositive"};
+    
     return {};
 }
 
