@@ -651,7 +651,7 @@ CassandraBackend::fetchIssuerNFTs(
     //it is still possible that there are unfetched NFTs.
     if (!nftListResponse && hasCursor)
         return std::make_pair(nftInfoList, cursor);
-    else if (!nftListResponse)
+    if (!nftListResponse)
         return {};
     
     cass_collection_free(collection); 
