@@ -44,7 +44,7 @@ doNFTInfo(Context const& context)
         ripple::toBase58(ripple::nft::getIssuer(dbResponse->tokenID));
     response["nft_taxon"] =
         ripple::nft::toUInt32(ripple::nft::getTaxon(dbResponse->tokenID));
-    response["nft_sequence"] = ripple::nft::getSerial(dbResponse->tokenID);
+    response[JS(nft_serial)] = ripple::nft::getSerial(dbResponse->tokenID);
 
     return response;
 }
