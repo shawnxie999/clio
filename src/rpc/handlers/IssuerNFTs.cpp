@@ -97,6 +97,11 @@ appendIssuerNFTJson(
         ripple::nft::toUInt32(ripple::nft::getTaxon(nftInfo.tokenID));
     obj["nft_sequence"] = ripple::nft::getSerial(nftInfo.tokenID);
 
+    // if(nftInfo.uri)
+    //     obj["uri"] = nftInfo.uri.value();
+    // else
+    //     obj["uri"] = nullptr;
+
     if (!nftInfo.isBurned)
     {
         auto const maybeURI = getURI2(nftInfo, context);
