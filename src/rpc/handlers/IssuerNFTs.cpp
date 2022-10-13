@@ -128,7 +128,7 @@ doIssuerNFTs(Context const& context)
     if (auto const status = getAccount(request, accountID); status)
         return status;
 
-    std::uint32_t taxon = 0;
+    std::optional<std::uint32_t> taxon = std::nullopt;
     if (auto const status = getNFTTaxon(context, taxon); status)
         return status;
 
