@@ -647,7 +647,6 @@ CassandraBackend::fetchIssuerNFTs(
         issuerNFTStatement.bindNextBytes(cursorIn.value().second);
     }
 
-
     issuerNFTStatement.bindNextUInt(limit);
 
     //queries for a list nftIDs against issuer_nf_tokens table
@@ -686,12 +685,14 @@ CassandraBackend::fetchIssuerNFTs(
         CassandraResult nextTaxonResponse = executeAsyncRead(issuerNFTStatement, yield);
         if (!nextTaxonResponse)
         {
+            // Without a response, we know there is no more NFTs for the issuer
             cursor = std::nullopt;
         }   
         else
         {
+            // When response is valid, there are additional NFTs, and we update the cursor on the last record
             auto nextTaxonNumRows = nextTaxonResponse.numRows();
-            hasCursor = (limit-numRows == static_cast<std::uint32_t>(nextTaxonNumRows)) ? true : false; 
+            hasCursor = (limit - numRows == static_cast<std::uint32_t>(nextTaxonNumRows)) ? true : false; 
             do
             {
                 std::uint32_t const nftTaxon = nextTaxonResponse.getUInt32();
@@ -756,7 +757,7 @@ CassandraBackend::fetchIssuerNFTs(
         nftInfoList.push_back(nftResult);
     } while (nftListResponse.nextRow());
 
-    std::pair<std::vector<NFT>, std::optional<ripple::uint256>> result;
+    std::pair<std::vector<NFT>, std::optional<std::pair<std::uint32_t, ripple::uint256>>> result;
     if(hasCursor)
         result = std::make_pair(nftInfoList, cursor);
     else
