@@ -620,7 +620,7 @@ std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
 CassandraBackend::fetchIssuerNFTs(
     ripple::AccountID const& issuer,
     std::uint32_t const ledgerSequence,
-  //  std::uint32_t const taxon,
+    std::optional<std::uint32_t> const taxon,
     std::optional<ripple::uint256> const& cursorIn,
     std::uint32_t const limit,
     boost::asio::yield_context& yield) const

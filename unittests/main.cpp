@@ -544,7 +544,7 @@ TEST(BackendTest, Basic)
                         EXPECT_EQ(nftTxns.size(), 1);
                         EXPECT_EQ(nftTxns[0], nftTxns[0]);
                         EXPECT_FALSE(cursor);
-                        auto issuerNFTs = backend->fetchIssuerNFTs(ripple::nft::getIssuer(nftID), lgrInfoNext.seq, static_cast<ripple::uint256>(0), 10, yield);
+                        auto issuerNFTs = backend->fetchIssuerNFTs(ripple::nft::getIssuer(nftID), lgrInfoNext.seq, 0,static_cast<ripple::uint256>(0), 10, yield);
                         EXPECT_TRUE(issuerNFTs.has_value());
                     }
                     else
@@ -563,7 +563,7 @@ TEST(BackendTest, Basic)
                             std::runtime_error);
                         EXPECT_THROW(
                             {
-                                backend->fetchIssuerNFTs(ripple::nft::getIssuer(nftID), lgrInfoNext.seq, static_cast<ripple::uint256>(0), 10, yield);
+                                backend->fetchIssuerNFTs(ripple::nft::getIssuer(nftID), lgrInfoNext.seq, 0 static_cast<ripple::uint256>(0), 10, yield);
                             },
                             std::runtime_error);
                     }

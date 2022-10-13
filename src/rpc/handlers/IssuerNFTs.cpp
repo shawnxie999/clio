@@ -97,24 +97,24 @@ appendIssuerNFTJson(
         ripple::nft::toUInt32(ripple::nft::getTaxon(nftInfo.tokenID));
     obj["nft_sequence"] = ripple::nft::getSerial(nftInfo.tokenID);
 
-    // if(nftInfo.uri)
-    //     obj["uri"] = nftInfo.uri.value();
-    // else
-    //     obj["uri"] = nullptr;
+    if(nftInfo.uri)
+        obj["uri"] = nftInfo.uri.value();
+    else
+        obj["uri"] = nullptr;
 
-    if (!nftInfo.isBurned)
-    {
-        auto const maybeURI = getURI2(nftInfo, context);
-        // An error occurred
-        if (Status const* status = std::get_if<Status>(&maybeURI); status)
-            return *status;
-        // A URI was found
-        if (std::string const* uri = std::get_if<std::string>(&maybeURI); uri)
-            obj["uri"] = *uri;
-        // A URI was not found, explicitly set to null
-        else
-            obj["uri"] = nullptr;
-    }
+    // if (!nftInfo.isBurned)
+    // {
+    //     auto const maybeURI = getURI2(nftInfo, context);
+    //     // An error occurred
+    //     if (Status const* status = std::get_if<Status>(&maybeURI); status)
+    //         return *status;
+    //     // A URI was found
+    //     if (std::string const* uri = std::get_if<std::string>(&maybeURI); uri)
+    //         obj["uri"] = *uri;
+    //     // A URI was not found, explicitly set to null
+    //     else
+    //         obj["uri"] = nullptr;
+    // }
     return {};
 }
 
@@ -146,7 +146,7 @@ doIssuerNFTs(Context const& context)
         return status;
 
     auto dbResponse =
-        context.backend->fetchIssuerNFTs(accountID, lgrInfo.seq, marker, limit, context.yield);
+        context.backend->fetchIssuerNFTs(accountID, lgrInfo.seq, taxon, marker, limit, context.yield);
     
     response["issuer"] = ripple::to_string(accountID);
     response["issuer_nfts"] = boost::json::value(boost::json::array_kind);
