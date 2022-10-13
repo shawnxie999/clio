@@ -648,14 +648,6 @@ CassandraBackend::fetchIssuerNFTs(
     }
 
 
-    // if(cursorIn)
-    //     issuerNFTStatement.bindNextBytes(cursorIn.value().first);
-    // else
-    //     issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
-    
-    // if(taxon)
-    //     issuerNFTStatement.bindNextInt(taxon.value());
-
     issuerNFTStatement.bindNextUInt(limit);
 
     //queries for a list nftIDs against issuer_nf_tokens table
@@ -681,7 +673,12 @@ CassandraBackend::fetchIssuerNFTs(
         nftPairs.push_back(nftPair);
     } while (issuerNFTResponse.nextRow());
 
-    if(cursorIn && !hasCursor){
+    // Without the taxon param, if the prev query has not reached the limit specified,
+    // we need to query for additional result for the proceeding NFTs with larger taxons.
+    // NOTE: this if-condition is only ran if the prev query was selectIssuerNFTsTaxonID_,
+    //       thus why cursorIn flag is used. If the prev query was selectIssuerNFTs_,
+    //       there is no need to query for larger taxons.
+    if(!taxon && cursorIn && !hasCursor){
         CassandraStatement nextTaxonStatement{selectIssuerNFTsTaxon_};
         nextTaxonStatement.bindNextBytes(issuer);
         nextTaxonStatement.bindNextInt(cursorIn.value().first);
