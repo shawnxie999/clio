@@ -119,3 +119,18 @@ like to sidestep this issue if possible.
 #### Implementation of fetchLedgerPage
 `fetchLedgerPage()` is rather complex. Part of this seems unavoidable, since this
 code is dealing with the keys table.
+
+
+curl 127.0.0.1:51233 -d '{"method":"nft_info", "params": [{"nft_id": "0x000800009d58640f4edb4c64af856908efdbc983a2109e2816e5da9c00000001"}]}'
+
+
+curl 127.0.0.1:51233 -d '{"method":"account_tx", "params": [{"account": "rKopWbBZosJu5E99D5KRq8ZBTeXvLsqN5Q" , "limit":5}]}'
+
+curl 127.0.0.1:51233 -d '{"method":"issuer_nfts", "params": [{"account": "rKopWbBZosJu5E99D5KRq8ZBTeXvLsqN5Q", "ledger_index":261, "limit":4}]}'
+
+curl 127.0.0.1:51233 -d '{"method":"issuer_nfts", "params": [{"account": "rKopWbBZosJu5E99D5KRq8ZBTeXvLsqN5Q", "ledger_index":263, "limit":4 }]}'
+
+curl 127.0.0.1:51233 -d '{"method":"issuer_nfts", "params": [{"account": "rKopWbBZosJu5E99D5KRq8ZBTeXvLsqN5Q", "ledger_index":263, "limit":-4,"marker":"00080000CE26A8B2374C8B0C303728AA343854E8DC9650F144B17C9E00000003", "taxon":2 }]}'
+
+
+curl 127.0.0.1:51233 -d '{"method":"account_tx", "params": [{"account": "rKopWbBZosJu5E99D5KRq8ZBTeXvLsqN5Q", "ledger_index":262}]}'

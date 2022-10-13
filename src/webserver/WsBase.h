@@ -15,6 +15,7 @@
 #include <rpc/WorkQueue.h>
 #include <subscriptions/Message.h>
 #include <subscriptions/SubscriptionManager.h>
+#include <util/Taggable.h>
 #include <webserver/DOSGuard.h>
 
 namespace http = boost::beast::http;
@@ -44,20 +45,33 @@ getDefaultWsResponse(boost::json::value const& id)
     return defaultResp;
 }
 
-class WsBase
+class WsBase : public util::Taggable
 {
 protected:
     boost::system::error_code ec_;
 
 public:
-    // Send, that enables SubscriptionManager to publish to clients
-    virtual void
-    send(std::shared_ptr<Message> msg) = 0;
-
-    virtual ~WsBase()
+    explicit WsBase(util::TagDecoratorFactory const& tagFactory)
+        : Taggable{tagFactory}
     {
     }
 
+    /**
+     * @brief Send, that enables SubscriptionManager to publish to clients
+     * @param msg The message to send
+     */
+    virtual void
+    send(std::shared_ptr<Message> msg) = 0;
+
+    virtual ~WsBase() = default;
+
+    /**
+     * @brief Indicates whether the connection had an error and is considered
+     * dead
+     *
+     * @return true
+     * @return false
+     */
     bool
     dead()
     {
@@ -69,7 +83,7 @@ class SubscriptionManager;
 class ETLLoadBalancer;
 
 // Echoes back all received WebSocket messages
-template <class Derived>
+template <typename Derived>
 class WsSession : public WsBase,
                   public std::enable_shared_from_this<WsSession<Derived>>
 {
@@ -85,6 +99,7 @@ class WsSession : public WsBase,
     std::weak_ptr<SubscriptionManager> subscriptions_;
     std::shared_ptr<ETLLoadBalancer> balancer_;
     std::shared_ptr<ReportingETL const> etl_;
+    util::TagDecoratorFactory const& tagFactory_;
     DOSGuard& dosGuard_;
     RPC::Counters& counters_;
     WorkQueue& queue_;
@@ -100,7 +115,7 @@ class WsSession : public WsBase,
         {
             ec_ = ec;
             BOOST_LOG_TRIVIAL(info)
-                << "wsFail: " << what << ": " << ec.message();
+                << tag() << __func__ << ": " << what << ": " << ec.message();
             boost::beast::get_lowest_layer(derived().ws()).socket().close(ec);
 
             if (auto manager = subscriptions_.lock(); manager)
@@ -115,23 +130,28 @@ public:
         std::shared_ptr<SubscriptionManager> subscriptions,
         std::shared_ptr<ETLLoadBalancer> balancer,
         std::shared_ptr<ReportingETL const> etl,
+        util::TagDecoratorFactory const& tagFactory,
         DOSGuard& dosGuard,
         RPC::Counters& counters,
         WorkQueue& queue,
         boost::beast::flat_buffer&& buffer)
-        : buffer_(std::move(buffer))
+        : WsBase(tagFactory)
+        , buffer_(std::move(buffer))
         , ioc_(ioc)
         , backend_(backend)
         , subscriptions_(subscriptions)
         , balancer_(balancer)
         , etl_(etl)
+        , tagFactory_(tagFactory)
         , dosGuard_(dosGuard)
         , counters_(counters)
         , queue_(queue)
     {
+        BOOST_LOG_TRIVIAL(info) << tag() << "session created";
     }
     virtual ~WsSession()
     {
+        BOOST_LOG_TRIVIAL(info) << tag() << "session closed";
     }
 
     // Access the derived class, this is part of
@@ -224,6 +244,8 @@ public:
         if (ec)
             return wsFail(ec, "accept");
 
+        BOOST_LOG_TRIVIAL(info) << tag() << "accepting new connection";
+
         // Read a message
         do_read();
     }
@@ -265,66 +287,65 @@ public:
 
         try
         {
-            BOOST_LOG_TRIVIAL(debug) << " received request : " << request;
-            try
-            {
-                auto range = backend_->fetchLedgerRange();
-                if (!range)
-                    return sendError(RPC::Error::rpcNOT_READY);
+            BOOST_LOG_TRIVIAL(debug)
+                << tag() << "ws received request from work queue : " << request;
 
-                std::optional<RPC::Context> context = RPC::make_WsContext(
-                    yield,
-                    request,
-                    backend_,
-                    subscriptions_.lock(),
-                    balancer_,
-                    etl_,
-                    shared_from_this(),
-                    *range,
-                    counters_,
-                    *ip);
-
-                if (!context)
-                    return sendError(RPC::Error::rpcBAD_SYNTAX);
-
-                response = getDefaultWsResponse(id);
-
-                auto start = std::chrono::system_clock::now();
-                auto v = RPC::buildResponse(*context);
-                auto end = std::chrono::system_clock::now();
-                auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    end - start);
-                logDuration(*context, us);
-
-                if (auto status = std::get_if<RPC::Status>(&v))
-                {
-                    counters_.rpcErrored(context->method);
-
-                    auto error = RPC::make_error(*status);
-
-                    if (!id.is_null())
-                        error["id"] = id;
-
-                    error["request"] = request;
-                    response = error;
-                }
-                else
-                {
-                    counters_.rpcComplete(context->method, us);
-
-                    response["result"] = std::get<boost::json::object>(v);
-                }
-            }
-            catch (Backend::DatabaseTimeout const& t)
-            {
-                BOOST_LOG_TRIVIAL(error) << __func__ << " Database timeout";
+            auto range = backend_->fetchLedgerRange();
+            if (!range)
                 return sendError(RPC::Error::rpcNOT_READY);
+
+            std::optional<RPC::Context> context = RPC::make_WsContext(
+                yield,
+                request,
+                backend_,
+                subscriptions_.lock(),
+                balancer_,
+                etl_,
+                shared_from_this(),
+                tagFactory_.with(std::cref(tag())),
+                *range,
+                counters_,
+                *ip);
+
+            if (!context)
+            {
+                BOOST_LOG_TRIVIAL(warning)
+                    << tag() << " could not create RPC context";
+                return sendError(RPC::Error::rpcBAD_SYNTAX);
+            }
+
+            response = getDefaultWsResponse(id);
+
+            auto start = std::chrono::system_clock::now();
+            auto v = RPC::buildResponse(*context);
+            auto end = std::chrono::system_clock::now();
+            auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+                end - start);
+            logDuration(*context, us);
+
+            if (auto status = std::get_if<RPC::Status>(&v))
+            {
+                counters_.rpcErrored(context->method);
+
+                auto error = RPC::make_error(*status);
+
+                if (!id.is_null())
+                    error["id"] = id;
+
+                error["request"] = request;
+                response = error;
+            }
+            else
+            {
+                counters_.rpcComplete(context->method, us);
+
+                response["result"] = std::get<boost::json::object>(v);
             }
         }
         catch (std::exception const& e)
         {
             BOOST_LOG_TRIVIAL(error)
-                << __func__ << " caught exception : " << e.what();
+                << tag() << __func__ << " caught exception : " << e.what();
 
             return sendError(RPC::Error::rpcINTERNAL);
         }
@@ -364,8 +385,8 @@ public:
         if (!ip)
             return;
 
-        BOOST_LOG_TRIVIAL(debug)
-            << __func__ << " received request from ip = " << *ip;
+        BOOST_LOG_TRIVIAL(info) << tag() << "ws::" << __func__
+                                << " received request from ip = " << *ip;
 
         auto sendError = [this, ip](
                              auto error,
@@ -407,6 +428,9 @@ public:
         }
         else
         {
+            BOOST_LOG_TRIVIAL(debug)
+                << tag() << __func__ << " adding to work queue";
+
             if (!queue_.postCoro(
                     [shared_this = shared_from_this(),
                      r = std::move(request),
