@@ -632,7 +632,7 @@ CassandraBackend::fetchIssuerNFTs(
     else
         issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
     
-  //  issuerNFTStatement.bindNextInt(taxon)
+    issuerNFTStatement.bindNextInt(taxon);
     issuerNFTStatement.bindNextUInt(limit);
 
     //queries for a list nftIDs against issuer_nf_tokens table
@@ -691,11 +691,11 @@ CassandraBackend::fetchIssuerNFTs(
         nftResult.owner = nftListResponse.getBytes();
         nftResult.isBurned = nftListResponse.getBool();
 
-        // CassandraStatement uriStatement{selectNFTURI_};
-        // uriStatement.bindNextBytes(nftResult.tokenID);
-        // CassandraResult uriResponse = executeAsyncRead(uriStatement, yield);
-        // if (uriResponse.hasResult())
-        //     nftResult.uri = uriResponse.getBytes();
+        CassandraStatement uriStatement{selectNFTURI_};
+        uriStatement.bindNextBytes(nftResult.tokenID);
+        CassandraResult uriResponse = executeAsyncRead(uriStatement, yield);
+        if (uriResponse.hasResult())
+            nftResult.uri = uriResponse.getBytes();
         nftInfoList.push_back(nftResult);
     } while (nftListResponse.nextRow());
 
@@ -1710,7 +1710,8 @@ CassandraBackend::open(bool readOnly)
         query << "SELECT token_id"
               << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
               << " issuer = ? AND"
-              << " token_id > ?"
+              << " token_id > ? AND"
+              << " token_taxon = ?"
               << " ORDER BY token_id ASC"
               << " LIMIT ?";
         if (!selectIssuerNFTs_.prepareStatement(query, session_.get()))
