@@ -98,7 +98,7 @@ appendIssuerNFTJson(
     obj["nft_sequence"] = ripple::nft::getSerial(nftInfo.tokenID);
 
     if(nftInfo.uri)
-        obj["uri"] = nftInfo.uri.value();
+        obj["uri"] = ripple::strHex(nftInfo.uri.value());
     else
         obj["uri"] = nullptr;
 
@@ -129,7 +129,7 @@ doIssuerNFTs(Context const& context)
         return status;
 
     std::optional<std::uint32_t> taxon = std::nullopt;
-    if (auto const status = getNFTTaxon(context, *taxon); status)
+    if (auto const status = getNFTTaxon(context, taxon); status)
         return status;
 
     std::uint32_t limit;

@@ -1508,7 +1508,7 @@ getNFTID(boost::json::object const& request)
 }
 
 Status
-getNFTTaxon(RPC::Context const& context, std::uint32_t& taxon)
+getNFTTaxon(RPC::Context const& context, std::optional<std::uint32_t>& taxon)
 {
     if(!context.params.contains("taxon"))
         return {};

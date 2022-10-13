@@ -625,14 +625,19 @@ CassandraBackend::fetchIssuerNFTs(
     std::uint32_t const limit,
     boost::asio::yield_context& yield) const
 {
-    CassandraStatement issuerNFTStatement{selectIssuerNFTs_};
+    CassandraStatement issuerNFTStatement = taxon 
+    ? CassandraStatement(selectIssuerNFTsTaxon_)
+    : CassandraStatement(selectIssuerNFTs_);
+
     issuerNFTStatement.bindNextBytes(issuer);
     if(cursorIn)
         issuerNFTStatement.bindNextBytes(cursorIn.value());
     else
         issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
     
-    issuerNFTStatement.bindNextInt(taxon);
+    if(taxon)
+        issuerNFTStatement.bindNextInt(taxon.value());
+
     issuerNFTStatement.bindNextUInt(limit);
 
     //queries for a list nftIDs against issuer_nf_tokens table
@@ -1710,11 +1715,22 @@ CassandraBackend::open(bool readOnly)
         query << "SELECT token_id"
               << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
               << " issuer = ? AND"
+              << " token_id > ?"
+              << " ORDER BY token_id ASC"
+              << " LIMIT ?";
+        if (!selectIssuerNFTs_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT token_id"
+              << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
+              << " issuer = ? AND"
               << " token_id > ? AND"
               << " token_taxon = ?"
               << " ORDER BY token_id ASC"
               << " LIMIT ?";
-        if (!selectIssuerNFTs_.prepareStatement(query, session_.get()))
+        if (!selectIssuerNFTsTaxon_.prepareStatement(query, session_.get()))
+            continue;
 
         query.str("");
         query << "INSERT INTO " << tablePrefix << "nf_token_uris"
