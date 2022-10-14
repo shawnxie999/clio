@@ -187,12 +187,12 @@ public:
         std::uint32_t const ledgerSequence,
         boost::asio::yield_context& yield) const = 0;
 
-    virtual std::optional<std::pair<std::vector<NFT>, std::optional<ripple::uint256>>>
+    virtual std::optional<std::pair<std::vector<NFT>, std::optional<std::pair<std::uint32_t, ripple::uint256>>>>
     fetchIssuerNFTs(
         ripple::AccountID const& issuer,
         std::uint32_t const ledgerSequence,
-       // std::optional<std::uint32_t> const taxon,
-        std::optional<ripple::uint256> const& cursorIn,
+        std::optional<std::uint32_t> taxon,
+        std::optional<std::pair<std::uint32_t, ripple::uint256>>const cursorIn,
         std::uint32_t const limit,
         boost::asio::yield_context& yield) const = 0;
 

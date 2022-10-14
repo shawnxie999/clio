@@ -261,6 +261,11 @@ getNFTID(boost::json::object const& request);
 Status
 getNFTTaxon(RPC::Context const& context, std::optional<std::uint32_t>& taxon);
 
+Status
+getIssuerNFTMarker(
+    boost::json::object const& request, 
+    std::optional<std::pair<std::uint32_t, ripple::uint256>> & marker);
+
 // This function is the driver for both `account_tx` and `nft_tx` and should
 // be used for any future transaction enumeration APIs.
 std::variant<Status, boost::json::object>

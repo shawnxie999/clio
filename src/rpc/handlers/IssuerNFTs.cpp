@@ -6,76 +6,6 @@
 #include <rpc/RPCHelpers.h>
 
 namespace RPC {
-std::variant<std::monostate, std::string, Status>
-getURI2(Backend::NFT const& dbResponse, Context const& context)
-{
-    // Fetch URI from ledger
-    // The correct page will be > bookmark and <= last. We need to calculate
-    // the first possible page however, since bookmark is not guaranteed to
-    // exist.
-    auto const bookmark = ripple::keylet::nftpage(
-        ripple::keylet::nftpage_min(dbResponse.owner), dbResponse.tokenID);
-    auto const last = ripple::keylet::nftpage_max(dbResponse.owner);
-
-    ripple::uint256 nextKey = last.key;
-    std::optional<ripple::STLedgerEntry> sle;
-
-    // when this loop terminates, `sle` will contain the correct page for
-    // this NFT.
-    //
-    // 1) We start at the last NFTokenPage, which is guaranteed to exist,
-    // grab the object from the DB and deserialize it.
-    //
-    // 2) If that NFTokenPage has a PreviousPageMin value and the
-    // PreviousPageMin value is > bookmark, restart loop. Otherwise
-    // terminate and use the `sle` from this iteration.
-    do
-    {
-        auto const blob = context.backend->fetchLedgerObject(
-            ripple::Keylet(ripple::ltNFTOKEN_PAGE, nextKey).key,
-            dbResponse.ledgerSequence,
-            context.yield);
-
-        if (!blob || blob->size() == 0)
-            return Status{
-                Error::rpcINTERNAL, "Cannot find NFTokenPage for this NFT"};
-
-        sle = ripple::STLedgerEntry(
-            ripple::SerialIter{blob->data(), blob->size()}, nextKey);
-
-        if (sle->isFieldPresent(ripple::sfPreviousPageMin))
-            nextKey = sle->getFieldH256(ripple::sfPreviousPageMin);
-
-    } while (sle && sle->key() != nextKey && nextKey > bookmark.key);
-
-    if (!sle)
-        return Status{
-            Error::rpcINTERNAL, "Cannot find NFTokenPage for this NFT"};
-
-    auto const nfts = sle->getFieldArray(ripple::sfNFTokens);
-    auto const nft = std::find_if(
-        nfts.begin(),
-        nfts.end(),
-        [&dbResponse](ripple::STObject const& candidate) {
-            return candidate.getFieldH256(ripple::sfNFTokenID) ==
-                dbResponse.tokenID;
-        });
-
-    if (nft == nfts.end())
-        return Status{
-            Error::rpcINTERNAL, "Cannot find NFTokenPage for this NFT"};
-
-    ripple::Blob const uriField = nft->getFieldVL(ripple::sfURI);
-
-    // NOTE this cannot use a ternary or value_or because then the
-    // expression's type is unclear. We want to explicitly set the `uri`
-    // field to null when not present to avoid any confusion.
-    if (std::string const uri = std::string(uriField.begin(), uriField.end());
-        uri.size() > 0)
-        return uri;
-    return std::monostate{};
-}
-
 Status
 appendIssuerNFTJson(
     Context const& context, 
@@ -97,24 +27,24 @@ appendIssuerNFTJson(
         ripple::nft::toUInt32(ripple::nft::getTaxon(nftInfo.tokenID));
     obj["nft_sequence"] = ripple::nft::getSerial(nftInfo.tokenID);
 
-    // if(nftInfo.uri)
-    //     obj["uri"] = nftInfo.uri.value();
-    // else
-    //     obj["uri"] = nullptr;
+    if(nftInfo.uri)
+        obj["uri"] = ripple::strHex(nftInfo.uri.value());
+    else
+        obj["uri"] = nullptr;
 
-    if (!nftInfo.isBurned)
-    {
-        auto const maybeURI = getURI2(nftInfo, context);
-        // An error occurred
-        if (Status const* status = std::get_if<Status>(&maybeURI); status)
-            return *status;
-        // A URI was found
-        if (std::string const* uri = std::get_if<std::string>(&maybeURI); uri)
-            obj["uri"] = *uri;
-        // A URI was not found, explicitly set to null
-        else
-            obj["uri"] = nullptr;
-    }
+    // if (!nftInfo.isBurned)
+    // {
+    //     auto const maybeURI = getURI2(nftInfo, context);
+    //     // An error occurred
+    //     if (Status const* status = std::get_if<Status>(&maybeURI); status)
+    //         return *status;
+    //     // A URI was found
+    //     if (std::string const* uri = std::get_if<std::string>(&maybeURI); uri)
+    //         obj["uri"] = *uri;
+    //     // A URI was not found, explicitly set to null
+    //     else
+    //         obj["uri"] = nullptr;
+    // }
     return {};
 }
 
@@ -141,12 +71,12 @@ doIssuerNFTs(Context const& context)
         return *status;
     auto const lgrInfo = std::get<ripple::LedgerInfo>(maybeLedgerInfo);
 
-    ripple::uint256 marker = beast::zero;
-    if (auto const status = getHexMarker(request, marker); status)
+    std::optional<std::pair<std::uint32_t, ripple::uint256>> marker = std::nullopt;
+    if (auto const status = getIssuerNFTMarker(request, marker); status)
         return status;
 
     auto dbResponse =
-        context.backend->fetchIssuerNFTs(accountID, lgrInfo.seq, marker, limit, context.yield);
+        context.backend->fetchIssuerNFTs(accountID, lgrInfo.seq, taxon, marker, limit, context.yield);
     
     response["issuer"] = ripple::to_string(accountID);
     response["issuer_nfts"] = boost::json::value(boost::json::array_kind);
@@ -160,7 +90,13 @@ doIssuerNFTs(Context const& context)
             return status;
     } 
     if(dbResponse->second)
-        response["marker"] = ripple::strHex(dbResponse->second.value());
+    {
+        boost::json::object cursorJson;
+        cursorJson["taxon_marker"] = dbResponse->second.value().first;
+        cursorJson["token_marker"] = ripple::strHex(dbResponse->second.value().second);
+        response[JS(marker)] = cursorJson;
+    }
+
     response["limit"] = limit;
     return response;
 }
