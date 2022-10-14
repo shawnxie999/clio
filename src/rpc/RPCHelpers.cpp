@@ -1534,29 +1534,24 @@ getIssuerNFTMarker(
         return Status{Error::rpcINVALID_PARAMS, "invalidMarker"};
     auto const& obj = request.at(JS(marker)).as_object();
     
-    std::optional<std::uint32_t> taxonMarker = {};
-    std::optional<ripple::uint256> tokenIDMarker = {};
-    if (obj.contains("taxon_marker"))
-    {
-        if (!obj.at("taxon_marker").is_int64())
+    if (!obj.contains("taxon_marker") || !obj.contains("token_marker"))
+        return Status{Error::rpcINVALID_PARAMS, "missingMarker"};
+    
+    std::uint32_t taxonMarker;
+    ripple::uint256 tokenIDMarker;
+
+    if (!obj.at("taxon_marker").is_int64())
         return Status{
             Error::rpcINVALID_PARAMS, "taxonMarkerNotInt"};
             taxonMarker = boost::json::value_to<std::uint32_t>(obj.at("taxon_marker"));
-    }
 
-    if (obj.contains("token_marker"))
-    {
-        if (!request.at("token_marker").is_string())
-            return Status{Error::rpcINVALID_PARAMS, "tokenMarkerNotString"};
+    if (!obj.at("token_marker").is_string())
+        return Status{Error::rpcINVALID_PARAMS, "tokenMarkerNotString"};
 
-        if (!tokenIDMarker->parseHex(request.at("token_marker").as_string().c_str()))
-            return Status{Error::rpcINVALID_PARAMS, "malformedTokenMarker"};
-    }
+    if (!tokenIDMarker.parseHex(obj.at("token_marker").as_string().c_str()))
+        return Status{Error::rpcINVALID_PARAMS, "malformedTokenMarker"};
 
-    if(!taxonMarker || !tokenIDMarker)
-         return Status{Error::rpcINVALID_PARAMS, "missingMarker"};
-
-    marker = std::make_pair(*taxonMarker, *tokenIDMarker);
+    marker = std::make_pair(taxonMarker, tokenIDMarker);
     return {};
 }
 
