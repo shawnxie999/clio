@@ -160,7 +160,13 @@ doIssuerNFTs(Context const& context)
             return status;
     } 
     if(dbResponse->second)
-        response["marker"] = ripple::strHex(dbResponse->second.value());
+    {
+        boost::json::object cursorJson;
+        cursorJson["taxon_marker"] = dbResponse->second.value().first;
+        cursorJson["token_marker"] = ripple::strHex(dbResponse->second.value().second);
+        response[JS(marker)] = cursorJson;
+    }
+
     response["limit"] = limit;
     return response;
 }

@@ -672,7 +672,7 @@ CassandraBackend::fetchIssuerNFTs(
         nftPairs.push_back(nftPair);
     } while (issuerNFTResponse.nextRow());
 
-    // Without the taxon param, if the prev query has not reached the limit specified,
+    // Without the taxon param, if the prev query has not reached the limit specified (hasCursor flag),
     // we need to query for additional result for the proceeding NFTs with larger taxons.
     // NOTE: this if-condition is only ran if the prev query was selectIssuerNFTsTaxonID_,
     //       thus why cursorIn flag is used. If the prev query was selectIssuerNFTs_,
