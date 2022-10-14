@@ -141,8 +141,8 @@ doIssuerNFTs(Context const& context)
         return *status;
     auto const lgrInfo = std::get<ripple::LedgerInfo>(maybeLedgerInfo);
 
-    ripple::uint256 marker = beast::zero;
-    if (auto const status = getHexMarker(request, marker); status)
+    std::optional<std::pair<std::uint32_t, ripple::uint256>> marker = std::nullopt;
+    if (auto const status = getIssuerNFTMarker(request, marker); status)
         return status;
 
     auto dbResponse =
