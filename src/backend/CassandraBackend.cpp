@@ -651,26 +651,28 @@ CassandraBackend::fetchIssuerNFTs(
 
     //queries for a list nftIDs against issuer_nf_tokens table
     CassandraResult issuerNFTResponse = executeAsyncRead(issuerNFTStatement, yield);
-    if (!issuerNFTResponse)
-        return {};
 
     auto cursor = cursorIn;
     auto numRows = issuerNFTResponse.numRows();
     auto hasCursor = (limit == static_cast<std::uint32_t>(numRows)) ? true : false;
     std::vector<std::pair<std::uint32_t, ripple::uint256>> nftPairs = {};
 
-    do
+    if(numRows != 0)
     {
-        std::uint32_t const nftTaxon = issuerNFTResponse.getUInt32();
-        ripple::uint256 const nftID = issuerNFTResponse.getUInt256();
-        std::pair<std::uint32_t, ripple::uint256> nftPair = std::make_pair(nftTaxon, nftID);
-        if (hasCursor && --numRows == 0)
+        do
         {
-            cursor = nftPair;
-        }
-        
-        nftPairs.push_back(nftPair);
-    } while (issuerNFTResponse.nextRow());
+            std::uint32_t const nftTaxon = issuerNFTResponse.getUInt32();
+            ripple::uint256 const nftID = issuerNFTResponse.getUInt256();
+            std::pair<std::uint32_t, ripple::uint256> nftPair = std::make_pair(nftTaxon, nftID);
+            if (hasCursor && --numRows == 0)
+            {
+                cursor = nftPair;
+            }
+            
+            nftPairs.push_back(nftPair);
+        } while (issuerNFTResponse.nextRow());
+    }
+
 
     // Without the taxon param, if the prev query has not reached the limit specified (hasCursor flag),
     // we need to query for additional result for the proceeding NFTs with larger taxons.
@@ -682,7 +684,7 @@ CassandraBackend::fetchIssuerNFTs(
         nextTaxonStatement.bindNextBytes(issuer);
         nextTaxonStatement.bindNextInt(cursorIn.value().first);
         nextTaxonStatement.bindNextUInt(limit-numRows);
-        CassandraResult nextTaxonResponse = executeAsyncRead(issuerNFTStatement, yield);
+        CassandraResult nextTaxonResponse = executeAsyncRead(nextTaxonStatement, yield);
         if (!nextTaxonResponse)
         {
             // Without a response, we know there is no more NFTs for the issuer
@@ -1753,7 +1755,7 @@ CassandraBackend::open(bool readOnly)
               << " FROM " << tablePrefix << "nf_tokens WHERE"
               << " token_id IN ? AND"
               << " sequence <= ?"
-              << " ORDER BY sequence DESC";
+              << " ORDER BY sequence DESC PER PARTITION LIMIT 1";
         if (!selectNFTList_.prepareStatement(query, session_.get()))
             continue;
 
@@ -1777,7 +1779,7 @@ CassandraBackend::open(bool readOnly)
         query << "SELECT token_taxon, token_id"
               << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
               << " issuer = ? AND"
-              << " token_taxon = ?"
+              << " token_taxon > ?"
               << " ORDER BY token_taxon, token_id ASC"
               << " LIMIT ?";
         if (!selectIssuerNFTsTaxon_.prepareStatement(query, session_.get()))
