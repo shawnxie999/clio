@@ -1517,7 +1517,7 @@ getNFTTaxon(RPC::Context const& context, std::optional<std::uint32_t>& taxon)
         return Status{Error::rpcINVALID_PARAMS, "taxonNotInt"};
 
     taxon = context.params.at("taxon").as_int64();
-    if (taxon <= 0)
+    if (taxon < 0)
         return Status{Error::rpcINVALID_PARAMS, "taxonNotPositive"};
     
     return {};
