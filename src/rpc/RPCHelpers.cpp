@@ -1512,7 +1512,7 @@ getNFTTaxon(RPC::Context const& context, std::optional<std::uint32_t>& taxon)
         return Status{Error::rpcINVALID_PARAMS, "taxonNotInt"};
 
     taxon = context.params.at("taxon").as_int64();
-    if (taxon <= 0)
+    if (taxon < 0)
         return Status{Error::rpcINVALID_PARAMS, "taxonNotPositive"};
 
     return {};
@@ -1549,6 +1549,7 @@ getIssuerNFTMarker(
     marker = std::make_pair(taxonMarker, tokenIDMarker);
     return {};
 }
+
 
 // TODO - this function is long and shouldn't be responsible for as much as it
 // is. Split it out into some helper functions.

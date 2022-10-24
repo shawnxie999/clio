@@ -652,8 +652,8 @@ private:
     CassandraPreparedStatement selectNFTList_;
     CassandraPreparedStatement insertIssuerNFT_;
     CassandraPreparedStatement selectIssuerNFTs_;
-    CassandraPreparedStatement selectIssuerNFTsTaxon_;
-    CassandraPreparedStatement selectIssuerNFTsTaxonID_;
+    CassandraPreparedStatement selectIssuerNFTsByTaxon_;
+    CassandraPreparedStatement selectIssuerNFTsByTaxonID_;
     CassandraPreparedStatement insertNFTTx_;
     CassandraPreparedStatement selectNFTTx_;
     CassandraPreparedStatement selectNFTTxForward_;
@@ -918,7 +918,7 @@ public:
         ripple::AccountID const& issuer,
         std::uint32_t const ledgerSequence,
         std::optional<std::uint32_t> taxon,
-         std::optional<std::pair<std::uint32_t, ripple::uint256>>const cursorIn,
+        std::optional<std::pair<std::uint32_t, ripple::uint256>>const cursorIn,
         std::uint32_t const limit,
         boost::asio::yield_context& yield) const override;
 
