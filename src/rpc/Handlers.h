@@ -64,6 +64,9 @@ doNFTInfo(Context const& context);
 Result
 doNFTHistory(Context const& context);
 
+Result
+doIssuerNFTs(Context const& context);
+
 // ledger methods
 Result
 doLedger(Context const& context);

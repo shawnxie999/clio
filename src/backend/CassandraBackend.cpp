@@ -1,8 +1,10 @@
-#include <ripple/app/tx/impl/details/NFTokenUtils.h>
-#include <backend/CassandraBackend.h>
-#include <backend/DBHelpers.h>
 #include <functional>
 #include <unordered_map>
+
+#include <ripple/app/tx/impl/details/NFTokenUtils.h>
+
+#include <backend/CassandraBackend.h>
+#include <backend/DBHelpers.h>
 
 namespace Backend {
 
@@ -376,17 +378,33 @@ CassandraBackend::writeNFTs(std::vector<NFTsData>&& data)
             },
             "nf_tokens");
 
-        makeAndExecuteAsyncWrite(
-            this,
-            std::make_tuple(record.tokenID),
-            [this](auto const& params) {
-                CassandraStatement statement{insertIssuerNFT_};
-                auto const& [tokenID] = params.data;
-                statement.bindNextBytes(ripple::nft::getIssuer(tokenID));
-                statement.bindNextBytes(tokenID);
-                return statement;
-            },
-            "issuer_nf_tokens");
+        if (record.issuer)
+            makeAndExecuteAsyncWrite(
+                this,
+                std::make_tuple(record.tokenID, record.issuer.value()),
+                [this](auto const& params) {
+                    CassandraStatement statement{insertIssuerNFT_};
+                    auto const& [tokenID, issuer] = params.data;
+                    statement.bindNextBytes(issuer);
+                    statement.bindNextInt(
+                        ripple::nft::toUInt32(ripple::nft::getTaxon(tokenID)));
+                    statement.bindNextBytes(tokenID);
+                    return statement;
+                },
+                "issuer_nf_tokens");
+
+        if (record.uri)
+            makeAndExecuteAsyncWrite(
+                this,
+                std::make_tuple(record.tokenID, record.uri.value()),
+                [this](auto const& params) {
+                    CassandraStatement statement{insertNFTURI_};
+                    auto const& [tokenID, uri] = params.data;
+                    statement.bindNextBytes(tokenID);
+                    statement.bindNextBytes(uri);
+                    return statement;
+                },
+                "nf_token_uris");
     }
 }
 
@@ -575,18 +593,179 @@ CassandraBackend::fetchNFT(
     std::uint32_t const ledgerSequence,
     boost::asio::yield_context& yield) const
 {
-    CassandraStatement statement{selectNFT_};
-    statement.bindNextBytes(tokenID);
-    statement.bindNextInt(ledgerSequence);
-    CassandraResult response = executeAsyncRead(statement, yield);
-    if (!response)
+    CassandraStatement nftStatement{selectNFT_};
+    nftStatement.bindNextBytes(tokenID);
+    nftStatement.bindNextInt(ledgerSequence);
+    CassandraResult nftResponse = executeAsyncRead(nftStatement, yield);
+    if (!nftResponse)
         return {};
 
     NFT result;
     result.tokenID = tokenID;
-    result.ledgerSequence = response.getUInt32();
-    result.owner = response.getBytes();
-    result.isBurned = response.getBool();
+    result.ledgerSequence = nftResponse.getUInt32();
+    result.owner = nftResponse.getBytes();
+    result.isBurned = nftResponse.getBool();
+
+    // now fetch URI
+    CassandraStatement uriStatement{selectNFTURI_};
+    uriStatement.bindNextBytes(tokenID);
+    CassandraResult uriResponse = executeAsyncRead(uriStatement, yield);
+    if (uriResponse.hasResult())
+        result.uri = uriResponse.getBytes();
+
+    return result;
+}
+
+std::optional<std::pair<std::vector<NFT>, std::optional<std::pair<std::uint32_t, ripple::uint256>>>>
+CassandraBackend::fetchIssuerNFTs(
+    ripple::AccountID const& issuer,
+    std::uint32_t const ledgerSequence,
+    std::optional<std::uint32_t> const taxon,
+    std::optional<std::pair<std::uint32_t, ripple::uint256>> const cursorIn,
+    std::uint32_t const limit,
+    boost::asio::yield_context& yield) const
+{
+    // When taxon or cursor param exists, we need to query the taxon and token_id columns
+    // otherswise, we only query by issuer
+    CassandraStatement issuerNFTStatement = taxon || cursorIn 
+        ? CassandraStatement(selectIssuerNFTsByTaxonID_)
+        : CassandraStatement(selectIssuerNFTs_);
+
+    issuerNFTStatement.bindNextBytes(issuer);
+
+
+    if(taxon && !cursorIn){ 
+        // If there is taxon and no cursor, we query with this specific taxon id
+        // and sets the token_id to 0 (we want to query from the beginning)
+        issuerNFTStatement.bindNextInt(taxon.value());
+        issuerNFTStatement.bindNextBytes(static_cast<ripple::uint256>(0));
+    }
+    else if(cursorIn){
+        // When there is a cursor, we use the taxon and token_id directly from it,
+        // regardless whether the taxon param is specified
+        issuerNFTStatement.bindNextInt(cursorIn.value().first);
+        issuerNFTStatement.bindNextBytes(cursorIn.value().second);
+    }
+
+    issuerNFTStatement.bindNextUInt(limit);
+
+    //queries for a list nftIDs against issuer_nf_tokens table
+    CassandraResult issuerNFTResponse = executeAsyncRead(issuerNFTStatement, yield);
+
+    auto cursor = cursorIn;
+    auto numRows = issuerNFTResponse.numRows();
+    auto hasCursor = (limit == static_cast<std::uint32_t>(numRows)) ? true : false;
+    std::vector<std::pair<std::uint32_t, ripple::uint256>> nftPairs = {};
+
+    if(numRows != 0)
+    {
+        do
+        {
+            std::uint32_t const nftTaxon = issuerNFTResponse.getUInt32();
+            ripple::uint256 const nftID = issuerNFTResponse.getUInt256();
+            std::pair<std::uint32_t, ripple::uint256> nftPair = std::make_pair(nftTaxon, nftID);
+            if (hasCursor && --numRows == 0)
+            {
+                cursor = nftPair;
+            }
+            
+            nftPairs.push_back(nftPair);
+        } while (issuerNFTResponse.nextRow());
+    }
+
+
+    // If the prev query has not reached the limit specified (hasCursor flag),
+    // we need to query for additional result for the proceeding NFTs with larger taxons.
+    // NOTE: this if-condition is only ran if the prev query was selectIssuerNFTsByTaxonID_,
+    //       thus why cursorIn flag is used. If the prev query was selectIssuerNFTs_,
+    //       there is no need to query for larger taxons. If a taxon is specified, there 
+    //       no need to query for higher taxon values
+    if(!taxon && cursorIn && !hasCursor){
+        CassandraStatement higherTaxonStatement{selectIssuerNFTsByTaxon_};
+        higherTaxonStatement.bindNextBytes(issuer);
+        higherTaxonStatement.bindNextInt(cursorIn.value().first);
+        higherTaxonStatement.bindNextUInt(limit - numRows);
+        CassandraResult higherTaxonResponse = executeAsyncRead(higherTaxonStatement, yield);
+        if (!higherTaxonResponse)
+        {
+            // Without a response, we know there is no more NFTs for the issuer
+            cursor = std::nullopt;
+        }   
+        else
+        {
+            // When response is valid, there are additional NFTs, and we update the cursor on the last record
+            auto higherTaxonNumRows = higherTaxonResponse.numRows();
+            hasCursor = (limit - numRows == static_cast<std::uint32_t>(higherTaxonNumRows)) ? true : false; 
+            do
+            {
+                std::uint32_t const nftTaxon = higherTaxonResponse.getUInt32();
+                ripple::uint256 const nftID = higherTaxonResponse.getUInt256();
+                std::pair<std::uint32_t, ripple::uint256> nftPair = std::make_pair(nftTaxon, nftID);
+                if (hasCursor && --higherTaxonNumRows == 0)
+                {
+                    cursor = nftPair;
+                }
+                
+                nftPairs.push_back(nftPair);
+            } while (higherTaxonResponse.nextRow());
+
+        }
+    }
+
+    CassandraStatement nftListStatement{selectNFTList_};
+    //constructs a list to be used with the IN keyword within a query
+    CassCollection* collection = cass_collection_new(CASS_COLLECTION_TYPE_LIST, numRows);
+    for(auto const& nftPair: nftPairs)
+    {
+        auto const nftID = nftPair.second;
+        //append each nftID to a list that is going to be queried against the nf_tokens table
+        CassError append = cass_collection_append_bytes(collection, static_cast<cass_byte_t const*>(nftID.data()), nftID.size());
+        if (append != CASS_OK)
+        {
+            std::stringstream ss;
+            ss << "Error appending bytes to collection: " << append << ", "
+            << cass_error_desc(append);
+            BOOST_LOG_TRIVIAL(error) << __func__ << " : " << ss.str();
+            throw std::runtime_error(ss.str());
+        }
+    }
+
+    nftListStatement.bindNextByteCollection(collection);
+    nftListStatement.bindNextInt(ledgerSequence);
+    //queries for ledger_sequence, is_burned and owner of each NFT
+    CassandraResult nftListResponse= executeAsyncRead(nftListStatement, yield);
+
+    std::vector<NFT> nftInfoList = {};
+    //Even if response from nf_tokens is empty, and we have a cursor,
+    //it is still possible that there are unfetched NFTs
+    //so return an empty list with a marker.
+    if (!nftListResponse && hasCursor)
+        return std::make_pair(nftInfoList, cursor);
+    if (!nftListResponse)
+        return {};
+    
+    cass_collection_free(collection); 
+    do
+    {
+        NFT nftResult;
+        nftResult.tokenID = nftListResponse.getUInt256();
+        nftResult.ledgerSequence = nftListResponse.getUInt32();
+        nftResult.owner = nftListResponse.getBytes();
+        nftResult.isBurned = nftListResponse.getBool();
+
+        CassandraStatement uriStatement{selectNFTURI_};
+        uriStatement.bindNextBytes(nftResult.tokenID);
+        CassandraResult uriResponse = executeAsyncRead(uriStatement, yield);
+        if (uriResponse.hasResult())
+            nftResult.uri = uriResponse.getBytes();
+        nftInfoList.push_back(nftResult);
+    } while (nftListResponse.nextRow());
+
+    std::pair<std::vector<NFT>, std::optional<std::pair<std::uint32_t, ripple::uint256>>> result;
+    if(hasCursor)
+        result = std::make_pair(nftInfoList, cursor);
+    else
+        result = std::make_pair(nftInfoList, std::nullopt);
     return result;
 }
 
@@ -1391,14 +1570,30 @@ CassandraBackend::open(bool readOnly)
               << "issuer_nf_tokens"
               << "  ("
               << "    issuer blob,"
+              << "    token_taxon bigint,"
               << "    token_id blob,"
-              << "    PRIMARY KEY (issuer, token_id)"
+              << "    PRIMARY KEY (issuer, token_taxon, token_id)"
               << "  )";
         if (!executeSimpleStatement(query.str()))
             continue;
 
         query.str("");
         query << "SELECT * FROM " << tablePrefix << "issuer_nf_tokens"
+              << " LIMIT 1";
+        if (!executeSimpleStatement(query.str()))
+            continue;
+
+        query.str("");
+        query << "CREATE TABLE IF NOT EXISTS " << tablePrefix << "nf_token_uris"
+              << "  ("
+              << "    token_id blob PRIMARY KEY,"
+              << "    uri blob"
+              << "  )";
+        if (!executeSimpleStatement(query.str()))
+            continue;
+
+        query.str("");
+        query << "SELECT * FROM " << tablePrefix << "nf_token_uris"
               << " LIMIT 1";
         if (!executeSimpleStatement(query.str()))
             continue;
@@ -1558,10 +1753,63 @@ CassandraBackend::open(bool readOnly)
             continue;
 
         query.str("");
+        query << "SELECT token_id,sequence,owner,is_burned"
+              << " FROM " << tablePrefix << "nf_tokens WHERE"
+              << " token_id IN ? AND"
+              << " sequence <= ?"
+              << " ORDER BY sequence DESC PER PARTITION LIMIT 1";
+        if (!selectNFTList_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
         query << "INSERT INTO " << tablePrefix << "issuer_nf_tokens"
-              << " (issuer,token_id)"
-              << " VALUES (?,?)";
+              << " (issuer,token_taxon,token_id)"
+              << " VALUES (?,?,?)";
         if (!insertIssuerNFT_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT token_taxon, token_id"
+              << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
+              << " issuer = ?"
+              << " ORDER BY token_taxon, token_id ASC"
+              << " LIMIT ?";
+        if (!selectIssuerNFTs_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT token_taxon, token_id"
+              << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
+              << " issuer = ? AND"
+              << " token_taxon > ?"
+              << " ORDER BY token_taxon, token_id ASC"
+              << " LIMIT ?";
+        if (!selectIssuerNFTsByTaxon_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT token_taxon, token_id"
+              << " FROM " << tablePrefix << "issuer_nf_tokens WHERE"
+              << " issuer = ? AND"
+              << " token_taxon = ? AND"
+              << " token_id > ? "
+              << " ORDER BY token_taxon, token_id ASC"
+              << " LIMIT ?";
+        if (!selectIssuerNFTsByTaxonID_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "INSERT INTO " << tablePrefix << "nf_token_uris"
+              << " (token_id,uri)"
+              << " VALUES (?,?)";
+        if (!insertNFTURI_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT uri FROM " << tablePrefix << "nf_token_uris"
+              << " WHERE token_id = ?"
+              << " LIMIT 1";
+        if (!selectNFTURI_.prepareStatement(query, session_.get()))
             continue;
 
         query.str("");

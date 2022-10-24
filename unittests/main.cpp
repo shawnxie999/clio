@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <backend/DBHelpers.h>
+#include <etl/NFTHelpers.h>
 #include <etl/ReportingETL.h>
 #include <gtest/gtest.h>
 #include <rpc/RPCHelpers.h>
@@ -9,6 +10,7 @@
 #include <boost/log/trivial.hpp>
 #include <backend/BackendFactory.h>
 #include <backend/BackendInterface.h>
+#include <ripple/app/tx/impl/details/NFTokenUtils.h>
 
 TEST(BackendTest, Basic)
 {
@@ -440,7 +442,7 @@ TEST(BackendTest, Basic)
                     ripple::SerialIter it{nftTxnBlob.data(), nftTxnBlob.size()};
                     ripple::STTx sttx{it};
                     auto const [parsedNFTTxsRef, parsedNFT] =
-                        getNFTData(nftTxMeta, sttx);
+                        getNFTDataFromTx(nftTxMeta, sttx);
                     // need to copy the nft txns so we can std::move later
                     std::vector<NFTTransactionsData> parsedNFTTxs;
                     parsedNFTTxs.insert(
@@ -542,6 +544,8 @@ TEST(BackendTest, Basic)
                         EXPECT_EQ(nftTxns.size(), 1);
                         EXPECT_EQ(nftTxns[0], nftTxns[0]);
                         EXPECT_FALSE(cursor);
+                        auto issuerNFTs = backend->fetchIssuerNFTs(ripple::nft::getIssuer(nftID), lgrInfoNext.seq, std::nullopt, std::nullopt, 10, yield);
+                        EXPECT_TRUE(issuerNFTs.has_value());
                     }
                     else
                     {
@@ -555,6 +559,11 @@ TEST(BackendTest, Basic)
                             {
                                 backend->fetchNFTTransactions(
                                     nftID, 100, true, {}, yield);
+                            },
+                            std::runtime_error);
+                        EXPECT_THROW(
+                            {
+                                backend->fetchIssuerNFTs(ripple::nft::getIssuer(nftID), lgrInfoNext.seq, std::nullopt, std::nullopt, 10, yield);
                             },
                             std::runtime_error);
                     }

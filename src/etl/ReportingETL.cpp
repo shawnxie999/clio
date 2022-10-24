@@ -1,5 +1,7 @@
 #include <ripple/basics/StringUtilities.h>
 #include <backend/DBHelpers.h>
+
+#include <etl/NFTHelpers.h>
 #include <etl/ReportingETL.h>
 
 #include <ripple/beast/core/CurrentThreadName.h>
@@ -50,7 +52,7 @@ ReportingETL::insertTransactions(
         ripple::TxMeta txMeta{
             sttx.getTransactionID(), ledger.seq, txn.metadata_blob()};
 
-        auto const [nftTxs, maybeNFT] = getNFTData(txMeta, sttx);
+        auto const [nftTxs, maybeNFT] = getNFTDataFromTx(txMeta, sttx);
         result.nfTokenTxData.insert(
             result.nfTokenTxData.end(), nftTxs.begin(), nftTxs.end());
         if (maybeNFT)
@@ -76,7 +78,7 @@ ReportingETL::insertTransactions(
         result.nfTokensData.end(),
         [](NFTsData const& a, NFTsData const& b) {
             return a.tokenID > b.tokenID &&
-                a.transactionIndex > b.transactionIndex;
+                a.transactionIndex.value_or(0) > b.transactionIndex.value_or(0);
         });
     // Now we can unique the NFTs by tokenID.
     auto last = std::unique(

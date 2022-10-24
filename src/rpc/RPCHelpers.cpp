@@ -1507,6 +1507,54 @@ getNFTID(boost::json::object const& request)
     return tokenid;
 }
 
+Status
+getNFTTaxon(RPC::Context const& context, std::optional<std::uint32_t>& taxon)
+{
+    if(!context.params.contains("taxon"))
+        return {};
+
+    if (!context.params.at("taxon").is_int64())
+        return Status{Error::rpcINVALID_PARAMS, "taxonNotInt"};
+
+    taxon = context.params.at("taxon").as_int64();
+    if (taxon < 0)
+        return Status{Error::rpcINVALID_PARAMS, "taxonNotPositive"};
+    
+    return {};
+}
+
+Status
+getIssuerNFTMarker(
+    boost::json::object const& request,
+    std::optional<std::pair<std::uint32_t, ripple::uint256>> & marker)
+{
+    if (!request.contains(JS(marker)))
+        return {};
+    if (!request.at(JS(marker)).is_object())
+        return Status{Error::rpcINVALID_PARAMS, "invalidMarker"};
+    auto const& obj = request.at(JS(marker)).as_object();
+    
+    if (!obj.contains("taxon_marker") || !obj.contains("token_marker"))
+        return Status{Error::rpcINVALID_PARAMS, "missingMarker"};
+    
+    std::uint32_t taxonMarker;
+    ripple::uint256 tokenIDMarker;
+
+    if (!obj.at("taxon_marker").is_int64())
+        return Status{
+            Error::rpcINVALID_PARAMS, "taxonMarkerNotInt"};
+            taxonMarker = boost::json::value_to<std::uint32_t>(obj.at("taxon_marker"));
+
+    if (!obj.at("token_marker").is_string())
+        return Status{Error::rpcINVALID_PARAMS, "tokenMarkerNotString"};
+
+    if (!tokenIDMarker.parseHex(obj.at("token_marker").as_string().c_str()))
+        return Status{Error::rpcINVALID_PARAMS, "malformedTokenMarker"};
+
+    marker = std::make_pair(taxonMarker, tokenIDMarker);
+    return {};
+}
+
 // TODO - this function is long and shouldn't be responsible for as much as it
 // is. Split it out into some helper functions.
 std::variant<Status, boost::json::object>
