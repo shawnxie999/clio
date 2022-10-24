@@ -1796,6 +1796,9 @@ CassandraBackend::open(bool readOnly)
               << " ORDER BY token_taxon, token_id ASC"
               << " LIMIT ?";
         if (!selectIssuerNFTsByTaxonID_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
         query << "INSERT INTO " << tablePrefix << "nf_token_uris"
               << " (token_id,uri)"
               << " VALUES (?,?)";
