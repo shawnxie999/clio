@@ -175,23 +175,3 @@ size-based log rotation occurs, the timer for the time-based rotation will reset
 Since Clio relies on either Cassandra or Scylla for its database backend, here are some important considerations:
 
 - Scylla, by default, will reserve all free RAM on a machine for itself. If you are running `rippled` or other services on the same machine, restrict its memory usage using the `--memory` argument: https://docs.scylladb.com/getting-started/scylla-in-a-shared-environment/
-
-
-
-
-curl 127.0.0.1:51233 -d '{"method":"nft_info", "params": [{"nft_id": "000800002b144b8755d4502e5fc29b6303de8731a11f33130000099b00000000"}]}'
-
-
-curl 127.0.0.1:51233 -d '{"method":"account_tx", "params": [{"account": "rhv844bg4SBz15aGxMUJXQANwt7bmuVZvc", "limit":3}]}'
-
-
-curl 127.0.0.1:51233 -d '{"method":"account_tx", "params": [{"account": "rEZwoVwcfpGoNp4Da6u4ecdSwUn99sCuHN"}]}'
-
-
-
-cmake -B build && cmake --build build --parallel $(nproc)
-
-curl 127.0.0.1:51233 -d '{"method":"issuer_nfts", "params": [{"account": "r9uqszT4U5PqC8FyeS9i3LG6eZLhd6F6N9",  "limit":3,"marker":{"taxon_marker":0,"token_marker":"0008000061BEBF69BDA2B49477A87243F3E9C3E01579DC6A2DCBAB9D00000002"}}]}'
-
-
-curl 127.0.0.1:51233 -d '{"method":"issuer_nfts", "params": [{"account": "r9uqszT4U5PqC8FyeS9i3LG6eZLhd6F6N9","limit":3}]}'
