@@ -1,8 +1,10 @@
-#include <ripple/app/tx/impl/details/NFTokenUtils.h>
-#include <backend/CassandraBackend.h>
-#include <backend/DBHelpers.h>
 #include <functional>
 #include <unordered_map>
+
+#include <ripple/app/tx/impl/details/NFTokenUtils.h>
+
+#include <backend/CassandraBackend.h>
+#include <backend/DBHelpers.h>
 
 namespace Backend {
 
@@ -376,17 +378,33 @@ CassandraBackend::writeNFTs(std::vector<NFTsData>&& data)
             },
             "nf_tokens");
 
-        makeAndExecuteAsyncWrite(
-            this,
-            std::make_tuple(record.tokenID),
-            [this](auto const& params) {
-                CassandraStatement statement{insertIssuerNFT_};
-                auto const& [tokenID] = params.data;
-                statement.bindNextBytes(ripple::nft::getIssuer(tokenID));
-                statement.bindNextBytes(tokenID);
-                return statement;
-            },
-            "issuer_nf_tokens");
+        if (record.issuer)
+            makeAndExecuteAsyncWrite(
+                this,
+                std::make_tuple(record.tokenID, record.issuer.value()),
+                [this](auto const& params) {
+                    CassandraStatement statement{insertIssuerNFT_};
+                    auto const& [tokenID, issuer] = params.data;
+                    statement.bindNextBytes(issuer);
+                    statement.bindNextInt(
+                        ripple::nft::toUInt32(ripple::nft::getTaxon(tokenID)));
+                    statement.bindNextBytes(tokenID);
+                    return statement;
+                },
+                "issuer_nf_tokens");
+
+        if (record.uri)
+            makeAndExecuteAsyncWrite(
+                this,
+                std::make_tuple(record.tokenID, record.uri.value()),
+                [this](auto const& params) {
+                    CassandraStatement statement{insertNFTURI_};
+                    auto const& [tokenID, uri] = params.data;
+                    statement.bindNextBytes(tokenID);
+                    statement.bindNextBytes(uri);
+                    return statement;
+                },
+                "nf_token_uris");
     }
 }
 
@@ -486,6 +504,7 @@ CassandraBackend::fetchTransactions(
 {
     if (hashes.size() == 0)
         return {};
+    numReadRequestsOutstanding_ += hashes.size();
 
     handler_type handler(std::forward<decltype(yield)>(yield));
     result_type result(handler);
@@ -518,6 +537,7 @@ CassandraBackend::fetchTransactions(
 
     // suspend the coroutine until completion handler is called.
     result.get();
+    numReadRequestsOutstanding_ -= hashes.size();
 
     auto end = std::chrono::system_clock::now();
     for (auto const& cb : cbs)
@@ -573,18 +593,26 @@ CassandraBackend::fetchNFT(
     std::uint32_t const ledgerSequence,
     boost::asio::yield_context& yield) const
 {
-    CassandraStatement statement{selectNFT_};
-    statement.bindNextBytes(tokenID);
-    statement.bindNextInt(ledgerSequence);
-    CassandraResult response = executeAsyncRead(statement, yield);
-    if (!response)
+    CassandraStatement nftStatement{selectNFT_};
+    nftStatement.bindNextBytes(tokenID);
+    nftStatement.bindNextInt(ledgerSequence);
+    CassandraResult nftResponse = executeAsyncRead(nftStatement, yield);
+    if (!nftResponse)
         return {};
 
     NFT result;
     result.tokenID = tokenID;
-    result.ledgerSequence = response.getUInt32();
-    result.owner = response.getBytes();
-    result.isBurned = response.getBool();
+    result.ledgerSequence = nftResponse.getUInt32();
+    result.owner = nftResponse.getBytes();
+    result.isBurned = nftResponse.getBool();
+
+    // now fetch URI
+    CassandraStatement uriStatement{selectNFTURI_};
+    uriStatement.bindNextBytes(tokenID);
+    CassandraResult uriResponse = executeAsyncRead(uriStatement, yield);
+    if (uriResponse.hasResult())
+        result.uri = uriResponse.getBytes();
+
     return result;
 }
 
@@ -965,6 +993,8 @@ CassandraBackend::doFetchLedgerObjects(
     if (keys.size() == 0)
         return {};
 
+    numReadRequestsOutstanding_ += keys.size();
+
     handler_type handler(std::forward<decltype(yield)>(yield));
     result_type result(handler);
 
@@ -991,6 +1021,7 @@ CassandraBackend::doFetchLedgerObjects(
 
     // suspend the coroutine until completion handler is called.
     result.get();
+    numReadRequestsOutstanding_ -= keys.size();
 
     for (auto const& cb : cbs)
     {
@@ -1118,6 +1149,12 @@ CassandraBackend::doOnlineDelete(
     return true;
 }
 
+bool
+CassandraBackend::isTooBusy() const
+{
+    return numReadRequestsOutstanding_ >= maxReadRequestsOutstanding;
+}
+
 void
 CassandraBackend::open(bool readOnly)
 {
@@ -1143,7 +1180,6 @@ CassandraBackend::open(bool readOnly)
 
     BOOST_LOG_TRIVIAL(info) << "Opening Cassandra Backend";
 
-    std::lock_guard<std::mutex> lock(mutex_);
     CassCluster* cluster = cass_cluster_new();
     if (!cluster)
         throw std::runtime_error("nodestore:: Failed to create CassCluster");
@@ -1230,21 +1266,26 @@ CassandraBackend::open(bool readOnly)
            << ", result: " << rc << ", " << cass_error_desc(rc);
         throw std::runtime_error(ss.str());
     }
-    if (getInt("max_requests_outstanding"))
-        maxRequestsOutstanding = *getInt("max_requests_outstanding");
+    if (getInt("max_write_requests_outstanding"))
+        maxWriteRequestsOutstanding = *getInt("max_write_requests_outstanding");
+
+    if (getInt("max_read_requests_outstanding"))
+        maxReadRequestsOutstanding = *getInt("max_read_requests_outstanding");
 
     if (getInt("sync_interval"))
         syncInterval_ = *getInt("sync_interval");
     BOOST_LOG_TRIVIAL(info)
         << __func__ << " sync interval is " << syncInterval_
-        << ". max requests outstanding is " << maxRequestsOutstanding;
+        << ". max write requests outstanding is " << maxWriteRequestsOutstanding
+        << ". max read requests outstanding is " << maxReadRequestsOutstanding;
 
     cass_cluster_set_request_timeout(cluster, 10000);
 
     rc = cass_cluster_set_queue_size_io(
         cluster,
-        maxRequestsOutstanding);  // This number needs to scale w/ the
-                                  // number of request per sec
+        maxWriteRequestsOutstanding +
+            maxReadRequestsOutstanding);  // This number needs to scale w/ the
+                                          // number of request per sec
     if (rc != CASS_OK)
     {
         std::stringstream ss;
@@ -1529,14 +1570,30 @@ CassandraBackend::open(bool readOnly)
               << "issuer_nf_tokens"
               << "  ("
               << "    issuer blob,"
+              << "    token_taxon bigint,"
               << "    token_id blob,"
-              << "    PRIMARY KEY (issuer, token_id)"
+              << "    PRIMARY KEY (issuer, token_taxon, token_id)"
               << "  )";
         if (!executeSimpleStatement(query.str()))
             continue;
 
         query.str("");
         query << "SELECT * FROM " << tablePrefix << "issuer_nf_tokens"
+              << " LIMIT 1";
+        if (!executeSimpleStatement(query.str()))
+            continue;
+
+        query.str("");
+        query << "CREATE TABLE IF NOT EXISTS " << tablePrefix << "nf_token_uris"
+              << "  ("
+              << "    token_id blob PRIMARY KEY,"
+              << "    uri blob"
+              << "  )";
+        if (!executeSimpleStatement(query.str()))
+            continue;
+
+        query.str("");
+        query << "SELECT * FROM " << tablePrefix << "nf_token_uris"
               << " LIMIT 1";
         if (!executeSimpleStatement(query.str()))
             continue;
@@ -1706,8 +1763,8 @@ CassandraBackend::open(bool readOnly)
 
         query.str("");
         query << "INSERT INTO " << tablePrefix << "issuer_nf_tokens"
-              << " (issuer,token_id)"
-              << " VALUES (?,?)";
+              << " (issuer,token_taxon,token_id)"
+              << " VALUES (?,?,?)";
         if (!insertIssuerNFT_.prepareStatement(query, session_.get()))
             continue;
 
@@ -1739,6 +1796,17 @@ CassandraBackend::open(bool readOnly)
               << " ORDER BY token_taxon, token_id ASC"
               << " LIMIT ?";
         if (!selectIssuerNFTsByTaxonID_.prepareStatement(query, session_.get()))
+        query << "INSERT INTO " << tablePrefix << "nf_token_uris"
+              << " (token_id,uri)"
+              << " VALUES (?,?)";
+        if (!insertNFTURI_.prepareStatement(query, session_.get()))
+            continue;
+
+        query.str("");
+        query << "SELECT uri FROM " << tablePrefix << "nf_token_uris"
+              << " WHERE token_id = ?"
+              << " LIMIT 1";
+        if (!selectNFTURI_.prepareStatement(query, session_.get()))
             continue;
 
         query.str("");

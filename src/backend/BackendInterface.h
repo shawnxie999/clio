@@ -1,16 +1,24 @@
 #ifndef RIPPLE_APP_REPORTING_BACKENDINTERFACE_H_INCLUDED
 #define RIPPLE_APP_REPORTING_BACKENDINTERFACE_H_INCLUDED
+
+#include <boost/asio/spawn.hpp>
+#include <boost/json.hpp>
+#include <boost/log/trivial.hpp>
+
 #include <ripple/ledger/ReadView.h>
-#include <boost/asio.hpp>
+
 #include <backend/DBHelpers.h>
 #include <backend/SimpleCache.h>
 #include <backend/Types.h>
+
 #include <thread>
 #include <type_traits>
+
 namespace Backend {
 
 class DatabaseTimeout : public std::exception
 {
+public:
     const char*
     what() const throw() override
     {
@@ -30,9 +38,10 @@ retryOnTimeout(F func, size_t waitMs = 500)
         }
         catch (DatabaseTimeout& t)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(waitMs));
             BOOST_LOG_TRIVIAL(error)
-                << __func__ << " function timed out. Retrying ... ";
+                << __func__
+                << " Database request timed out. Sleeping and retrying ... ";
+            std::this_thread::sleep_for(std::chrono::milliseconds(waitMs));
         }
     }
 }
@@ -85,9 +94,6 @@ protected:
     mutable std::shared_mutex rngMtx_;
     std::optional<LedgerRange> range;
     SimpleCache cache_;
-
-    // mutex used for open() and close()
-    mutable std::mutex mutex_;
 
 public:
     BackendInterface(boost::json::object const& config)
@@ -350,6 +356,9 @@ public:
     // Close the database, releasing any resources
     virtual void
     close(){};
+
+    virtual bool
+    isTooBusy() const = 0;
 
     // *** private helper methods
 private:

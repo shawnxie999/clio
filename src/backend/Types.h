@@ -64,6 +64,7 @@ struct NFT
     ripple::uint256 tokenID;
     std::uint32_t ledgerSequence;
     ripple::AccountID owner;
+    std::optional<Blob> uri;
     bool isBurned;
 
     // clearly two tokens are the same if they have the same ID, but this
