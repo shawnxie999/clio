@@ -13,6 +13,6 @@ then
     exit 1
 fi
 
-cqlsh  -e "INSERT INTO clio.ledger_range(is_latest, sequence) VALUES(true,$XLS20_PRIOR_LEDGER_INDEX);"
+cqlsh -e "INSERT INTO clio.ledger_range(is_latest, sequence) VALUES(true,$XLS20_PRIOR_LEDGER_INDEX);"
 
-cqlsh  -e "DROP TABLE clio.issuer_nf_tokens;"
+cqlsh -e "DROP TABLE clio.issuer_nf_tokens;"
