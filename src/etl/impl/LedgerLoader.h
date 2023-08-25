@@ -39,6 +39,7 @@ struct FormattedTransactionsData
     std::vector<AccountTransactionsData> accountTxData;
     std::vector<NFTTransactionsData> nfTokenTxData;
     std::vector<NFTsData> nfTokensData;
+    std::vector<std::pair<ripple::uint256, ripple::AccountID>> cftIssuancePairData;
 };
 
 namespace etl::detail {
@@ -106,6 +107,11 @@ public:
             result.nfTokenTxData.insert(result.nfTokenTxData.end(), nftTxs.begin(), nftTxs.end());
             if (maybeNFT)
                 result.nfTokensData.push_back(*maybeNFT);
+            
+            // No need to unqiue this because CFTs cannot duplicate
+            auto const maybeCFTIssuancePair = getCFTIssuancePairFromTx(txMeta, sttx);
+            if(maybeCFTIssuancePair)
+                result.cftIssuancePairData.push_back(*maybeCFTIssuancePair);
 
             auto journal = ripple::debugLog();
             result.accountTxData.emplace_back(txMeta, sttx.getTransactionID(), journal);
@@ -246,6 +252,7 @@ public:
                 backend_->writeAccountTransactions(std::move(insertTxResult.accountTxData));
                 backend_->writeNFTs(std::move(insertTxResult.nfTokensData));
                 backend_->writeNFTTransactions(std::move(insertTxResult.nfTokenTxData));
+                backend_->writeCFTIssuancePairs(std::move(insertTxResult.cftIssuancePairData));
             }
 
             backend_->finishWrites(sequence);

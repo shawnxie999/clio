@@ -33,6 +33,7 @@
 #include <rpc/handlers/AccountTx.h>
 #include <rpc/handlers/BookChanges.h>
 #include <rpc/handlers/BookOffers.h>
+#include <rpc/handlers/CFTsByIssuer.h>
 #include <rpc/handlers/DepositAuthorized.h>
 #include <rpc/handlers/GatewayBalances.h>
 #include <rpc/handlers/Ledger.h>
@@ -73,6 +74,7 @@ ProductionHandlerProvider::ProductionHandlerProvider(
           {"account_tx", {AccountTxHandler{backend}}},
           {"book_changes", {BookChangesHandler{backend}}},
           {"book_offers", {BookOffersHandler{backend}}},
+          {"cfts_by_issuer", {CFTsByIssuerHandler{backend}, true}}, 
           {"deposit_authorized", {DepositAuthorizedHandler{backend}}},
           {"gateway_balances", {GatewayBalancesHandler{backend}}},
           {"ledger", {LedgerHandler{backend}}},

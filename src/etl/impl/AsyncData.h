@@ -20,6 +20,7 @@
 #pragma once
 
 #include <etl/NFTHelpers.h>
+#include <etl/CFTHelpers.h>
 #include <util/log/Logger.h>
 
 #include <ripple/proto/org/xrpl/rpc/v1/xrp_ledger.grpc.pb.h>
@@ -140,6 +141,12 @@ public:
                     backend.writeSuccessor(std::move(lastKey_), request_.ledger().sequence(), std::string{obj.key()});
                 lastKey_ = obj.key();
                 backend.writeNFTs(getNFTDataFromObj(request_.ledger().sequence(), obj.key(), obj.data()));
+
+                // Need to convert result into a vector of size 1
+                auto const maybeCFTIsssuancePair = getCFTIssuancePairFromObj(request_.ledger().sequence(), obj.key(), obj.data());
+                if(maybeCFTIsssuancePair)
+                    backend.writeCFTIssuancePairs({*maybeCFTIsssuancePair});
+
                 backend.writeLedgerObject(
                     std::move(*obj.mutable_key()), request_.ledger().sequence(), std::move(*obj.mutable_data()));
             }

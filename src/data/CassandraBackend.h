@@ -482,6 +482,102 @@ public:
         return {txns, {}};
     }
 
+    CFTIssuancesAndCursor
+    fetchIssuerCFTs(ripple::AccountID const& issuer,
+        std::uint32_t const limit,
+        std::optional<ripple::uint256> const& cursorIn,
+        std::uint32_t const ledgerSequence,
+        boost::asio::yield_context yield)const override
+    {
+        // Statement statement = schema_->selectIssuerCFTs.bind(issuer);
+        // statement.bindAt(1, cursorIn.value_or(ripple::uint256(0)));
+        // statement.bindAt(2, Limit{limit});
+        // auto const issuerRes = executor_.read(yield, statement);
+       
+        auto const issuerRes = executor_.read(yield, schema_->selectIssuerCFTs, issuer, cursorIn.value_or(ripple::uint256(0)), Limit{limit});
+
+        auto const& issuerResults = issuerRes.value();
+        if (not issuerResults.hasRows())
+        {
+            LOG(log_.debug()) << "No rows returned";
+            return {};
+        }
+ 
+        std::vector<ripple::uint256> cftIssuances;
+        std::optional<ripple::uint256> cursor;
+        for (auto [cftIssuanceID] : extract<ripple::uint256>(issuerResults))
+        {
+            cftIssuances.push_back(cftIssuanceID);
+            cursor = cftIssuanceID;
+        }
+
+        auto const maybeCFTIssuanceObjects =  doFetchLedgerObjectsPair(cftIssuances, ledgerSequence, yield);
+        
+        std::vector<std::tuple<ripple::uint256, Blob, uint32_t>> cftIssuanceObjects;
+
+        //need to filter out the objs that don't exist at the ledger seq because these CFTs are in no particular time order
+        for(size_t i = 0; i < cftIssuances.size(); i++){
+            if(!maybeCFTIssuanceObjects[i].has_value())
+                continue;
+            
+            auto const objSeqPair = maybeCFTIssuanceObjects[i].value();
+            cftIssuanceObjects.push_back(std::make_tuple(cftIssuances[i], objSeqPair.first, objSeqPair.second));
+
+        }
+
+        if(cftIssuances.size() == limit)
+            return {cftIssuanceObjects, cursor};
+        
+        return {cftIssuanceObjects, {}};
+    }
+
+    std::vector<std::optional<std::pair<Blob, uint32_t>>>
+    doFetchLedgerObjectsPair(
+        std::vector<ripple::uint256> const& keys,
+        std::uint32_t const sequence,
+        boost::asio::yield_context yield) const override
+    {
+        if (keys.size() == 0)
+            return {};
+
+        auto const numKeys = keys.size();
+        LOG(log_.trace()) << "Fetching " << numKeys << " objects";
+
+        std::vector<std::optional<std::pair<Blob, uint32_t>>> results;
+        results.reserve(numKeys);
+
+        std::vector<Statement> statements;
+        statements.reserve(numKeys);
+
+        // TODO: seems like a job for "key IN (list of keys)" instead?
+        std::transform(
+            std::cbegin(keys), std::cend(keys), std::back_inserter(statements), [this, &sequence](auto const& key) {
+                return schema_->selectObject.bind(key, sequence);
+            });
+
+        auto const entries = executor_.readEach(yield, statements);
+        if(entries.size() != statements.size())
+        {
+            LOG(log_.debug()) << "Input and output vector sizes are different";
+            return {};
+        }   
+
+
+        std::transform(
+            std::cbegin(entries), std::cend(entries), std::back_inserter(results), [](auto const& res) -> std::optional<std::pair<Blob, uint32_t>> {
+                if (auto const maybeValue = res.template get<Blob, uint32_t>(); maybeValue){
+                    auto [object, seq] = *maybeValue;
+                    return std::make_pair(object, seq);
+                }
+                else
+                    return {};
+            });
+        
+        assert(numKeys == results.size());
+        LOG(log_.trace()) << "Fetched " << numKeys << " objects";
+        return results;
+    }
+
     std::optional<Blob>
     doFetchLedgerObject(ripple::uint256 const& key, std::uint32_t const sequence, boost::asio::yield_context yield)
         const override
@@ -780,6 +876,22 @@ public:
             }
         }
 
+        executor_.write(std::move(statements));
+    }
+
+    void
+    writeCFTIssuancePairs(std::vector<std::pair<ripple::uint256, ripple::AccountID>>&& data) override
+    {
+        std::vector<Statement> statements;
+        for (auto const& record : data)
+        {
+            auto const token_id = record.first;
+            auto const issuer = record.second;
+
+             statements.push_back(
+                schema_->insertIssuerCFT.bind(issuer, token_id));
+        }
+        
         executor_.write(std::move(statements));
     }
 

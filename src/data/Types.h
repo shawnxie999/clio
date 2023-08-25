@@ -175,6 +175,12 @@ struct NFT
     }
 };
 
+struct CFTIssuancesAndCursor
+{
+    std::vector<std::tuple<ripple::uint256, Blob, uint32_t>> cftIssuances;
+    std::optional<ripple::uint256> cursor;
+};
+
 /**
  * @brief Stores a range of sequences as a min and max pair.
  */

@@ -295,6 +295,15 @@ public:
         std::optional<TransactionsCursor> const& cursorIn,
         boost::asio::yield_context yield) const = 0;
 
+    virtual 
+    CFTIssuancesAndCursor
+    fetchIssuerCFTs(
+        ripple::AccountID const& issuer,
+        std::uint32_t const limit,
+        std::optional<ripple::uint256> const& cursorIn,
+        std::uint32_t const ledgerSequence,
+        boost::asio::yield_context yield) const = 0;
+
     /**
      * @brief Fetches a specific ledger object.
      *
@@ -348,6 +357,12 @@ public:
      */
     virtual std::vector<Blob>
     doFetchLedgerObjects(
+        std::vector<ripple::uint256> const& keys,
+        std::uint32_t const sequence,
+        boost::asio::yield_context yield) const = 0;
+
+    virtual std::vector<std::optional<std::pair<Blob, uint32_t>>>
+    doFetchLedgerObjectsPair(
         std::vector<ripple::uint256> const& keys,
         std::uint32_t const sequence,
         boost::asio::yield_context yield) const = 0;
@@ -519,6 +534,9 @@ public:
      */
     virtual void
     writeNFTTransactions(std::vector<NFTTransactionsData>&& data) = 0;
+
+    virtual void
+    writeCFTIssuancePairs(std::vector<std::pair<ripple::uint256, ripple::AccountID>>&& data) = 0;
 
     /**
      * @brief Write a new successor.
