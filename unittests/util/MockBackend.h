@@ -149,4 +149,14 @@ struct MockBackend : public BackendInterface
     MOCK_METHOD(void, doWriteLedgerObject, (std::string&&, std::uint32_t const, std::string&&), (override));
 
     MOCK_METHOD(bool, doFinishWrites, (), (override));
+
+    MOCK_METHOD((std::vector<std::optional<std::pair<Blob, uint32_t>>>), doFetchLedgerObjectsPair, (std::vector<ripple::uint256> const&, std::uint32_t const, boost::asio::yield_context), (const, override));
+    
+    MOCK_METHOD(void, writeCFTIssuancePairs, ((std::vector<std::pair<ripple::uint256, ripple::AccountID>>&&)), (override));
+
+    MOCK_METHOD(CFTIssuancesAndCursor, fetchIssuerCFTs, (ripple::AccountID const& issuer,
+        std::uint32_t const ,
+        (std::optional<ripple::uint256> const&) ,
+        std::uint32_t const ,
+        boost::asio::yield_context), (const, override));
 };

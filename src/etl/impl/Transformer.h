@@ -199,6 +199,7 @@ private:
         backend_->writeAccountTransactions(std::move(insertTxResultOp->accountTxData));
         backend_->writeNFTs(std::move(insertTxResultOp->nfTokensData));
         backend_->writeNFTTransactions(std::move(insertTxResultOp->nfTokenTxData));
+        backend_->writeCFTIssuancePairs(std::move(insertTxResultOp->cftIssuancePairData));
 
         auto [success, duration] =
             ::util::timed<std::chrono::duration<double>>([&]() { return backend_->finishWrites(lgrInfo.seq); });

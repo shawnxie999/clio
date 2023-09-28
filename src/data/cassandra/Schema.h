@@ -252,6 +252,19 @@ public:
             qualifiedTableName(settingsProvider_.get(), "nf_token_transactions"),
             settingsProvider_.get().getTtl()));
 
+        statements.emplace_back(fmt::format(
+            R"(
+           CREATE TABLE IF NOT EXISTS {}
+                  ( 
+                    issuer blob,
+                    token_id  blob,
+                    PRIMARY KEY (issuer, token_id)
+                  ) 
+             WITH CLUSTERING ORDER BY (token_id ASC)
+              AND default_time_to_live = {}
+            )",
+            qualifiedTableName(settingsProvider_.get(), "issuer_cf_tokens"),
+            settingsProvider_.get().getTtl()));
         return statements;
     }();
 
@@ -393,6 +406,15 @@ public:
                 qualifiedTableName(settingsProvider_.get(), "ledger_hashes")));
         }();
 
+        PreparedStatement insertIssuerCFT = [this]() {
+            return handle_.get().prepare(fmt::format(
+                R"(
+                INSERT INTO {} 
+                       (issuer, token_id)
+                VALUES (?, ?)
+                )",
+                qualifiedTableName(settingsProvider_.get(), "issuer_cf_tokens")));
+        }();
         //
         // Update (and "delete") queries
         //
@@ -633,6 +655,20 @@ public:
                 )",
                 qualifiedTableName(settingsProvider_.get(), "ledger_range")));
         }();
+
+        PreparedStatement selectIssuerCFTs = [this]() {
+            return handle_.get().prepare(fmt::format(
+                R"(
+                SELECT token_id
+                  FROM {}    
+                 WHERE issuer = ?
+                   AND token_id > ?
+              ORDER BY token_id ASC
+                 LIMIT ?
+                )",
+                qualifiedTableName(settingsProvider_.get(), "issuer_cf_tokens")));
+        }();
+
     };
 
     /**

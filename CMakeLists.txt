@@ -87,6 +87,7 @@ target_sources (clio PRIVATE
   src/etl/ETLService.cpp
   src/etl/LoadBalancer.cpp
   src/etl/impl/ForwardCache.cpp
+  src/etl/CFTHelpers.cpp
   ## Feed
   src/feed/SubscriptionManager.cpp
   ## Web
@@ -113,6 +114,7 @@ target_sources (clio PRIVATE
   src/rpc/handlers/AccountTx.cpp
   src/rpc/handlers/BookChanges.cpp
   src/rpc/handlers/BookOffers.cpp
+  src/rpc/handlers/CFTsByIssuer.cpp
   src/rpc/handlers/DepositAuthorized.cpp
   src/rpc/handlers/GatewayBalances.cpp
   src/rpc/handlers/Ledger.cpp

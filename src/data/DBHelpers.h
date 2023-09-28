@@ -251,3 +251,40 @@ uint256ToString(ripple::uint256 const& input)
 
 /** @brief The ripple epoch start timestamp. Midnight on 1st January 2000. */
 static constexpr std::uint32_t rippleEpochStart = 946684800;
+
+
+/**
+ * @brief Represents an CFT state at a particular ledger.
+ *
+ */
+struct CFTsData
+{
+    ripple::uint256 cftIssuanceID;
+    ripple::AccountID holder;
+    std::uint32_t ledgerSequence;
+    std::uint32_t flags;
+    std::uint64_t amount;
+    std::uint64_t lockedAmount;
+    bool isUntrusted = false;
+
+
+    CFTsData(
+        ripple::uint256 const& cftIssuanceID,
+        ripple::AccountID const& holder,
+        std::uint32_t ledgerSequence,
+        std::uint32_t flags,
+        std::uint64_t amount,
+        std::uint64_t lockedAmount,
+        bool isUntrusted)
+        : cftIssuanceID(cftIssuanceID), 
+            holder(holder),
+            ledgerSequence(ledgerSequence), 
+            flags(flags), 
+            amount(amount), 
+            lockedAmount(lockedAmount),
+            isUntrusted(isUntrusted)
+    {
+    }
+
+
+};
