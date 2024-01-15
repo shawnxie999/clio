@@ -974,13 +974,16 @@ isGlobalFrozen(
     BackendInterface const& backend,
     std::uint32_t sequence,
     ripple::AccountID const& issuer,
+    ripple::Asset const& asset,
     boost::asio::yield_context yield
 )
 {
-    if (ripple::isXRP(issuer))
+    if (ripple::isXRP(asset))
         return false;
 
-    auto key = ripple::keylet::account(issuer).key;
+    // If asset is MPT, retrieve the MPTokenIssuance for token-wide freeze/lock
+    // Otherwise, asset is IOU, retrieve the AccountRoot of the issuer for global freeze
+    auto key = asset.isMPT() ? ripple::keylet::mptIssuance(asset).key : ripple::keylet::account(issuer).key;
     auto blob = backend.fetchLedgerObject(key, sequence, yield);
 
     if (!blob)
@@ -989,7 +992,47 @@ isGlobalFrozen(
     ripple::SerialIter it{blob->data(), blob->size()};
     ripple::SLE const sle{it, key};
 
+    if (asset.isMPT())
+        return sle.isFlag(ripple::lsfMPTLocked);
+
     return sle.isFlag(ripple::lsfGlobalFreeze);
+}
+
+static bool
+isIndividualFrozen(
+    BackendInterface const& backend,
+    std::uint32_t sequence,
+    ripple::AccountID const& account,
+    ripple::Asset const& asset,
+    ripple::AccountID const& issuer,
+    boost::asio::yield_context yield
+){
+    if (ripple::isXRP(asset))
+        return false;
+
+    if (issuer != account) {
+        // If asset is MPT, retrieve the MPToken
+        // Otherwise, asset is IOU, retrieve the trustline
+        key = isMPT(asset) ? ripple::keylet::mptoken(asset, account).key : ripple::keylet::line(account, issuer, asset).key;
+        blob = backend.fetchLedgerObject(key, sequence, yield);
+
+        if (!blob)
+            return false;
+
+        ripple::SerialIter it{blob->data(), blob->size()};
+        ripple::SLE const sle{it, key};
+
+        // If asset is a MPT, check if individual MPToken is frozen/locked
+        if (isMPT(asset))
+            return sle.isFlag(ripple::lsfMPTLocked);
+
+        // Otherwise, asset is IOU, check for the individual trustline
+        auto frozen = (issuer > account) ? ripple::lsfHighFreeze : ripple::lsfLowFreeze;
+        if (sle.isFlag(frozen))
+            return true;            
+    }
+
+    return false;
 }
 
 bool
@@ -997,43 +1040,18 @@ isFrozen(
     BackendInterface const& backend,
     std::uint32_t sequence,
     ripple::AccountID const& account,
-    ripple::Currency const& currency,
+    ripple::Asset const& asset,
     ripple::AccountID const& issuer,
     boost::asio::yield_context yield
 )
 {
-    if (ripple::isXRP(currency))
+    if (ripple::isXRP(asset))
         return false;
 
-    auto key = ripple::keylet::account(issuer).key;
-    auto blob = backend.fetchLedgerObject(key, sequence, yield);
-
-    if (!blob)
-        return false;
-
-    ripple::SerialIter it{blob->data(), blob->size()};
-    ripple::SLE const sle{it, key};
-
-    if (sle.isFlag(ripple::lsfGlobalFreeze))
+    if (isGlobalFrozen(backend, sequence, issuer, asset, yield))
         return true;
-
-    if (issuer != account) {
-        key = ripple::keylet::line(account, issuer, currency).key;
-        blob = backend.fetchLedgerObject(key, sequence, yield);
-
-        if (!blob)
-            return false;
-
-        ripple::SerialIter issuerIt{blob->data(), blob->size()};
-        ripple::SLE const issuerLine{issuerIt, key};
-
-        auto frozen = (issuer > account) ? ripple::lsfHighFreeze : ripple::lsfLowFreeze;
-
-        if (issuerLine.isFlag(frozen))
-            return true;
-    }
-
-    return false;
+    
+    return isIndividualFrozen(backend, sequence, account, asset, issuer, yield);
 }
 
 ripple::XRPAmount

@@ -201,8 +201,9 @@ ledgerInfoToBlob(ripple::LedgerHeader const& info, bool includeHash = false);
 bool
 isGlobalFrozen(
     BackendInterface const& backend,
-    std::uint32_t seq,
+    std::uint32_t sequence,
     ripple::AccountID const& issuer,
+    ripple::Asset const& asset,
     boost::asio::yield_context yield
 );
 
