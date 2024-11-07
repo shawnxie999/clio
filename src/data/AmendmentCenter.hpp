@@ -128,6 +128,9 @@ struct Amendments {
     REGISTER(fixNFTokenPageLinks);
     REGISTER(InvariantsV1_1);
     REGISTER(MPTokensV1);
+    REGISTER(fixAMMv1_2);
+    REGISTER(AMMClawback);
+    REGISTER(Credentials);
 
     // Obsolete but supported by libxrpl
     REGISTER(CryptoConditionsSuite);
